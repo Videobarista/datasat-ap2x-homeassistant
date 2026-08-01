@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Datasat AP20/AP25",
+        "description": "Connect to the audio processor over TCP (port 14500).",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "password": "NetCmd/Setup password (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the processor",
+      "invalid_auth": "Password rejected (SECERR)"
+    },
+    "abort": {
+      "already_configured": "This processor is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AP20/AP25 options",
+        "description": "Formats cannot be read from the API; enter the exact format names as programmed on the unit, comma-separated (e.g. 'Digital Cinema, HDMI 1, Non-Sync').",
+        "data": {
+          "formats": "Formats (comma-separated, exact names)",
+          "power_on_macro": "Power-on macro name (optional)",
+          "power_off_macro": "Standby macro name (optional)",
+          "use_wol": "Use Wake-on-LAN for power on",
+          "scan_interval": "Poll interval (seconds)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Datasat AP20/AP25",
+        "description": "Verbind met de audioprocessor via TCP (poort 14500).",
+        "data": {
+          "host": "IP-adres",
+          "port": "Poort",
+          "password": "NetCmd/Setup-wachtwoord (optioneel)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met de processor",
+      "invalid_auth": "Wachtwoord geweigerd (SECERR)"
+    },
+    "abort": {
+      "already_configured": "Deze processor is al geconfigureerd"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AP20/AP25-opties",
+        "description": "Formats zijn niet via de API uit te lezen; voer de exacte formatnamen in zoals geprogrammeerd op het apparaat, kommagescheiden (bijv. 'Digital Cinema, HDMI 1, Non-Sync').",
+        "data": {
+          "formats": "Formats (kommagescheiden, exacte namen)",
+          "power_on_macro": "Macronaam voor inschakelen (optioneel)",
+          "power_off_macro": "Macronaam voor standby (optioneel)",
+          "use_wol": "Wake-on-LAN gebruiken voor inschakelen",
+          "scan_interval": "Poll-interval (seconden)"
+        }
+      }
+    }
+  }
+}
