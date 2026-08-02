@@ -9,7 +9,8 @@ TN-H413 rev D Remote Command API over TCP (port 14500).
   - Master fader as volume (0.0–10.0, tenths via `@FADER`)
   - Mute toggle (`@MUTED`)
   - Format selection as *source* with live feedback (`@FORMAT`)
-  - Power on via Wake-on-LAN (MAC is read from the unit during setup) and/or a
+  - Power on via Wake-on-LAN (MAC is read from the unit during setup)
+ and/or a
     power-on macro; standby via a macro (`@RUNMACRO`)
 - **Sensors**: H331 / H332 / H335 board temperatures (`@HEALTH TEMPERATURE`)
 - **Binary sensor**: power-supply fault, based on the H336 `vok` flag
@@ -38,6 +39,7 @@ enter the format names exactly as programmed on the unit, comma-separated:
 ```
 Digital Cinema, HDMI 1, HDMI 2, Non-Sync
 ```
+<img width="690" height="567" alt="Scherm­afbeelding 2026-08-02 om 16 22 00" src="https://github.com/user-attachments/assets/0ebb4a61-9ea1-42b6-aff6-e06cb74297b3" />
 
 There you can also set:
 
