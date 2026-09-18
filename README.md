@@ -1,69 +1,87 @@
 # Datasat AP20/AP25 — Home Assistant integration
 
-Custom integration for the Datasat AP20 and AP25 cinema audio processors, using the
-TN-H413 rev D Remote Command API over TCP (port 14500).
+[![Release](https://img.shields.io/github/v/release/Videobarista/datasat-ap2x-homeassistant?display_name=tag)](https://github.com/Videobarista/datasat-ap2x-homeassistant/releases)
+[![Validate](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/validate.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/validate.yml)
+[![HACS: custom](https://img.shields.io/badge/HACS-custom-41BDF5.svg)](https://hacs.xyz)
 
-## Features
+Custom integration for the Datasat AP20 and AP25 cinema audio processors, using
+the TN-H413 rev D remote command API over TCP (port 14500).
 
-- **Media player** entity:
-  - Master fader as volume (0.0–10.0, tenths via `@FADER`)
-  - Mute toggle (`@MUTED`)
-  - Format selection as *source* with live feedback (`@FORMAT`)
-  - Power on via Wake-on-LAN (MAC is read from the unit during setup)
- and/or a
-    power-on macro; standby via a macro (`@RUNMACRO`)
-- **Sensors**: H331 / H332 / H335 board temperatures (`@HEALTH TEMPERATURE`)
-- **Binary sensor**: power-supply fault, based on the H336 `vok` flag
-  (`@HEALTH H336VOLTS`)
-- Optional NetCmd/Setup password (`@AUTH` on connect)
-- Status polling (configurable interval) so HA stays in sync with changes made
-  on the front panel or by other controllers
-- Persistent TCP connection with automatic reconnect
+## Entities
 
-## Installation (HACS custom repository)
+| Entity | What it does |
+| --- | --- |
+| `media_player` | Master fader as volume, mute, format as source, power |
+| `number` — Master fader | Fader in front-panel units (0.0–10.0) |
+| `number` — Monitor level | Booth monitor level, 0–100 (`@MONITORLEVEL`) |
+| `switch` — Mute | Master mute (`@MUTED`) |
+| `switch` — Monitor mute | Booth monitor mute (`@MONITORMUTE`) |
+| `button` — Macro … | One button per configured macro (`@RUNMACRO`) |
+| `sensor` — H331/H332/H335 temperature | Board temperatures (`@HEALTH TEMPERATURE`) |
+| `sensor` — Last seen | When the processor last answered |
+| `binary_sensor` — Connection | On while the processor responds |
+| `binary_sensor` — Power supply fault | H336 rails out of limits (`@HEALTH H336VOLTS`) |
 
-1. HACS → Integrations → ⋮ → *Custom repositories* → add this repo (category
-   *Integration*), or copy `custom_components/datasat_ap2x` into your HA
-   `custom_components` folder.
-2. Restart Home Assistant.
-3. Settings → Devices & services → *Add integration* → **Datasat AP20/AP25**.
-4. Enter the IP address (port 14500) and, if configured on the unit, the
-   NetCmd or Setup password.
+Other properties: optional NetCmd/Setup password (`@AUTH` on connect), a single
+persistent TCP connection with automatic reconnect, and polling so Home
+Assistant follows changes made on the front panel or by other controllers.
 
-## Configuration (options)
+## Installation
 
-The API has **no command to list formats** — `@FORMAT` only reads the current
-one or sets one by exact name. Open the integration's *Configure* dialog and
-enter the format names exactly as programmed on the unit, comma-separated:
+HACS → ⋮ → *Custom repositories* → add
+`https://github.com/Videobarista/datasat-ap2x-homeassistant` as category
+*Integration*. Or copy `custom_components/datasat_ap2x` into your Home
+Assistant `custom_components` folder.
+
+Restart Home Assistant, then add it via *Settings → Devices & services → Add
+integration → Datasat AP20/AP25*. Enter the IP address and, if the unit has one
+configured, the NetCmd or Setup password.
+
+## Configuration
+
+The API has no command to list formats or macros, so enter their names yourself
+in the integration's *Configure* dialog, exactly as programmed on the unit:
 
 ```
-Digital Cinema, HDMI 1, HDMI 2, Non-Sync
+Formats:  Digital Cinema, HDMI 1, HDMI 2, Non-Sync
+Macros:   Showtime, Interval, Clean-up
 ```
-<img width="690" height="567" alt="Scherm­afbeelding 2026-08-02 om 16 22 00" src="https://github.com/user-attachments/assets/0ebb4a61-9ea1-42b6-aff6-e06cb74297b3" />
 
-There you can also set:
+Also configurable there: an external power switch entity, macros to run around
+power on/off, Wake-on-LAN, and the poll interval (default 10 s).
 
-- **Power-on / standby macro names** — macros defined on the AP20/AP25 itself
-  (System → Automation). Leave empty to disable `turn_on`/`turn_off`.
-- **Wake-on-LAN** — used for `turn_on` when the unit is unreachable.
-- **Poll interval** (default 10 s).
+## About power control
 
-## Presets (mute toggle, volume up/down)
+**The AP20/AP25 has no power or standby command.** TN-H413 rev D exposes
+system information, health, format, fader, mute, monitor level and macros —
+nothing that switches the unit on or off, and there is no standby state to read
+back. Wake-on-LAN is not supported by the processor's network interface either;
+the option exists only because it costs nothing to try on unusual hardware.
 
-These map directly to standard media player services, so dashboard buttons and
-automations can use:
+What this integration does instead:
 
-- `media_player.volume_mute` (toggle via `is_volume_muted`)
-- `media_player.volume_up` / `media_player.volume_down` (one tenth per step)
-- `media_player.select_source` for formats
-- `media_player.turn_on` / `media_player.turn_off`
+- **Detects power state by reachability.** If the processor does not answer on
+  port 14500, the media player reports *off*, the *Connection* sensor goes off
+  and *Last seen* keeps the timestamp of the last successful poll. An
+  unreachable unit is never logged as an error.
+- **Delegates real power control.** Point the *External power switch* option at
+  a smart plug or relay that feeds the processor, and `media_player.turn_on` /
+  `turn_off` will switch that entity. Note the usual rack order: mute or power
+  down the amplifiers first, then the processor.
+- **Runs macros around it.** If a technician has programmed macros (for example
+  to drive the GPIO relays that control the amplifier rack), name them in the
+  power-on/power-off options.
 
-## Notes
+For everyday use, muting is the intended "off" for this class of device.
 
-- When the processor is in standby (unreachable), the media player shows
-  **off** and `turn_on` still works via WoL.
-- Serial control is not supported; this integration is Ethernet only.
+## Compatibility
+
+Developed against the public TN-H413 rev D documentation. Feedback from real
+AP20/AP25 hardware is very welcome — please open an issue with the command and
+the response you see.
 
 ## License
 
-MIT
+[MIT](LICENSE). Datasat and AP20/AP25 are trademarks of their respective
+owners; this project is not affiliated with or endorsed by Datasat Digital
+Entertainment.

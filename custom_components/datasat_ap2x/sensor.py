@@ -1,6 +1,8 @@
-"""Board temperature sensors for the Datasat AP20/AP25."""
+"""Sensors for the Datasat AP20/AP25."""
 
 from __future__ import annotations
+
+from datetime import datetime
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -9,13 +11,10 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import Ap2xConfigEntry
-from .const import DOMAIN
-from .coordinator import Ap2xCoordinator
+from .entity import Ap2xEntity
 
 BOARDS = ("H331", "H332", "H335")
 
@@ -25,45 +24,66 @@ async def async_setup_entry(
     entry: Ap2xConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities(
-        Ap2xTemperatureSensor(entry.runtime_data, entry, idx, board)
-        for idx, board in enumerate(BOARDS)
-    )
+    """Set up the diagnostic sensors."""
+    runtime_data = entry.runtime_data
+    entities: list[SensorEntity] = [
+        Ap2xTemperatureSensor(runtime_data, entry, index, board)
+        for index, board in enumerate(BOARDS)
+    ]
+    entities.append(Ap2xLastSeenSensor(runtime_data, entry))
+    async_add_entities(entities)
 
 
-class Ap2xTemperatureSensor(CoordinatorEntity[Ap2xCoordinator], SensorEntity):
-    """One board temperature (HEALTH TEMPERATURE t1/t2/t3)."""
+class Ap2xTemperatureSensor(Ap2xEntity, SensorEntity):
+    """One board temperature from @HEALTH TEMPERATURE."""
 
-    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
-        self,
-        coordinator: Ap2xCoordinator,
-        entry: Ap2xConfigEntry,
-        index: int,
-        board: str,
+        self, runtime_data, entry: Ap2xConfigEntry, index: int, board: str
     ) -> None:
-        super().__init__(coordinator)
+        """Initialise the temperature sensor for one board."""
+        super().__init__(runtime_data, entry, f"temp_{board.lower()}")
         self._index = index
         self._attr_name = f"{board} temperature"
-        self._attr_unique_id = f"{entry.unique_id}_temp_{board.lower()}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.unique_id or entry.entry_id)}
-        )
 
     @property
     def available(self) -> bool:
+        """Only available when this board reported a value."""
         return (
             super().available
-            and self.coordinator.data.reachable
             and len(self.coordinator.data.temperatures) > self._index
         )
 
     @property
     def native_value(self) -> float | None:
-        temps = self.coordinator.data.temperatures
-        return temps[self._index] if len(temps) > self._index else None
+        """Return the board temperature."""
+        temperatures = self.coordinator.data.temperatures
+        if len(temperatures) > self._index:
+            return temperatures[self._index]
+        return None
+
+
+class Ap2xLastSeenSensor(Ap2xEntity, SensorEntity):
+    """Timestamp of the last successful poll, useful while the unit is off."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_name = "Last seen"
+
+    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+        """Initialise the last-seen sensor."""
+        super().__init__(runtime_data, entry, "last_seen")
+
+    @property
+    def available(self) -> bool:
+        """Remain available while the processor is off."""
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the processor last answered."""
+        return self.coordinator.data.last_seen

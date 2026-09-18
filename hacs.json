@@ -1,4 +1,5 @@
 {
   "name": "Datasat AP20/AP25",
-  "render_readme": true
+  "render_readme": true,
+  "homeassistant": "2024.12.0"
 }

@@ -3,33 +3,39 @@
     "step": {
       "user": {
         "title": "Datasat AP20/AP25",
-        "description": "Verbind met de audioprocessor via TCP (poort 14500).",
+        "description": "Verbind met de audioprocessor via TCP. De standaard besturingspoort is 14500.",
         "data": {
           "host": "IP-adres",
           "port": "Poort",
-          "password": "NetCmd/Setup-wachtwoord (optioneel)"
+          "password": "NetCmd- of Setup-wachtwoord (leeg laten als er geen is)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Kan geen verbinding maken met de processor",
-      "invalid_auth": "Wachtwoord geweigerd (SECERR)"
+      "cannot_connect": "Kan de processor niet bereiken. Controleer het IP-adres, de poort en of het apparaat aan staat.",
+      "invalid_auth": "De processor weigerde het wachtwoord (SECERR)."
     },
     "abort": {
-      "already_configured": "Deze processor is al geconfigureerd"
+      "already_configured": "Deze processor is al geconfigureerd."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "AP20/AP25-opties",
-        "description": "Formats zijn niet via de API uit te lezen; voer de exacte formatnamen in zoals geprogrammeerd op het apparaat, kommagescheiden (bijv. 'Digital Cinema, HDMI 1, Non-Sync').",
+        "title": "Datasat AP20/AP25-opties",
+        "description": "De API kan geen formats of macro's opsommen; vul hun namen exact in zoals ze op het apparaat geprogrammeerd zijn, gescheiden door komma's.",
         "data": {
           "formats": "Formats (kommagescheiden, exacte namen)",
-          "power_on_macro": "Macronaam voor inschakelen (optioneel)",
-          "power_off_macro": "Macronaam voor standby (optioneel)",
-          "use_wol": "Wake-on-LAN gebruiken voor inschakelen",
-          "scan_interval": "Poll-interval (seconden)"
+          "macros": "Macro's die een knop krijgen (kommagescheiden)",
+          "power_switch": "Externe voedingsschakelaar (slimme stekker of relais)",
+          "power_on_macro": "Macro die na inschakelen wordt uitgevoerd",
+          "power_off_macro": "Macro die vóór uitschakelen wordt uitgevoerd",
+          "use_wol": "Ook een Wake-on-LAN-pakket sturen bij inschakelen",
+          "scan_interval": "Poll-interval"
+        },
+        "data_description": {
+          "power_switch": "De processor heeft geen aan/uit-commando. Wijs hier de schakelaar aan die hem voedt om de voeding vanuit Home Assistant te regelen.",
+          "use_wol": "De meeste AP20/AP25-units ondersteunen geen Wake-on-LAN. Uit laten is prima."
         }
       }
     }

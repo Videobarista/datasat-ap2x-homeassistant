@@ -1,12 +1,12 @@
 {
   "domain": "datasat_ap2x",
   "name": "Datasat AP20/AP25",
-  "codeowners": ["@HuisAutomatisering"],
+  "codeowners": ["@Videobarista"],
   "config_flow": true,
-  "documentation": "https://github.com/HuisAutomatisering/datasat-ap2x-homeassistant",
+  "documentation": "https://github.com/Videobarista/datasat-ap2x-homeassistant",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/HuisAutomatisering/datasat-ap2x-homeassistant/issues",
+  "issue_tracker": "https://github.com/Videobarista/datasat-ap2x-homeassistant/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
