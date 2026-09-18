@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import socket
 from dataclasses import dataclass
 
 _LOGGER = logging.getLogger(__name__)
@@ -205,7 +204,8 @@ class Ap2xClient:
         reply = await self.command(f"RUNMACRO {name}")
         if reply.strip().upper().startswith("OK"):
             return True
-        _LOGGER.warning("Macro '%s' was not executed: %s", name, reply)
+        # The unit answered, so this is a naming problem rather than a link problem.
+        _LOGGER.warning("Macro '%s' was not executed by the processor: %s", name, reply)
         return False
 
     async def get_temperatures(self) -> list[float]:
@@ -265,14 +265,3 @@ def _float_list(csv: str | None) -> list[float]:
         except ValueError:
             _LOGGER.debug("Skipping unparsable value: %s", item)
     return values
-
-
-def send_wol(mac: str, broadcast: str = "255.255.255.255") -> None:
-    """Send a Wake-on-LAN magic packet. Blocking; run in an executor."""
-    clean = mac.replace(":", "").replace("-", "").replace(".", "")
-    if len(clean) != 12:
-        raise ValueError(f"Invalid MAC address: {mac}")
-    packet = bytes.fromhex("FF" * 6 + clean * 16)
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.sendto(packet, (broadcast, 9))

@@ -30,12 +30,10 @@
           "power_switch": "External power switch entity (smart plug or relay)",
           "power_on_macro": "Macro to run after powering on",
           "power_off_macro": "Macro to run before powering off",
-          "use_wol": "Also send a Wake-on-LAN packet when turning on",
           "scan_interval": "Poll interval"
         },
         "data_description": {
-          "power_switch": "The processor has no power command. Point this at the switch that feeds it to control power from Home Assistant.",
-          "use_wol": "Most AP20/AP25 units do not support Wake-on-LAN. Harmless to leave off."
+          "power_switch": "The processor has no power command. Point this at the switch that feeds it to control power from Home Assistant."
         }
       }
     }

@@ -38,5 +38,7 @@ class Ap2xMacroButton(Ap2xEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Execute the macro on the processor."""
-        await self.coordinator.client.run_macro(self._macro)
-        await self.coordinator.async_request_refresh()
+        await self._async_send(
+            lambda: self.coordinator.client.run_macro(self._macro),
+            f"run macro '{self._macro}'",
+        )

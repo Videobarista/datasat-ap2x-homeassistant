@@ -27,7 +27,6 @@ from .const import (
     CONF_POWER_SWITCH,
     CONF_SCAN_INTERVAL,
     CONF_SERIAL,
-    CONF_USE_WOL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MAX_SCAN_INTERVAL,
@@ -117,19 +116,22 @@ class Ap2xOptionsFlow(OptionsFlow):
         """Show and store the options."""
         if user_input is not None:
             cleaned = {
-                key: value for key, value in user_input.items() if value not in ("", None)
+                key: value
+                for key, value in user_input.items()
+                if value not in ("", None)
             }
-            cleaned[CONF_USE_WOL] = bool(user_input.get(CONF_USE_WOL, False))
             return self.async_create_entry(title="", data=cleaned)
 
         options = self.config_entry.options
         schema = vol.Schema(
             {
                 vol.Optional(
-                    CONF_FORMATS, description={"suggested_value": options.get(CONF_FORMATS)}
+                    CONF_FORMATS,
+                    description={"suggested_value": options.get(CONF_FORMATS)},
                 ): selector.TextSelector(),
                 vol.Optional(
-                    CONF_MACROS, description={"suggested_value": options.get(CONF_MACROS)}
+                    CONF_MACROS,
+                    description={"suggested_value": options.get(CONF_MACROS)},
                 ): selector.TextSelector(),
                 vol.Optional(
                     CONF_POWER_SWITCH,
@@ -147,9 +149,6 @@ class Ap2xOptionsFlow(OptionsFlow):
                     CONF_POWER_OFF_MACRO,
                     description={"suggested_value": options.get(CONF_POWER_OFF_MACRO)},
                 ): selector.TextSelector(),
-                vol.Optional(
-                    CONF_USE_WOL, default=options.get(CONF_USE_WOL, False)
-                ): selector.BooleanSelector(),
                 vol.Optional(
                     CONF_SCAN_INTERVAL,
                     default=options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),

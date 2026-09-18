@@ -48,8 +48,10 @@ class Ap2xFaderNumber(Ap2xEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the fader position in front-panel units."""
-        await self.coordinator.client.set_fader(round(value * 10))
-        await self.coordinator.async_request_refresh()
+        tenths = round(value * 10)
+        await self._async_send(
+            lambda: self.coordinator.client.set_fader(tenths), "set the fader"
+        )
 
 
 class Ap2xMonitorLevelNumber(Ap2xEntity, NumberEntity):
@@ -74,5 +76,8 @@ class Ap2xMonitorLevelNumber(Ap2xEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the monitor level."""
-        await self.coordinator.client.set_monitor_level(int(value))
-        await self.coordinator.async_request_refresh()
+        level = int(value)
+        await self._async_send(
+            lambda: self.coordinator.client.set_monitor_level(level),
+            "set the monitor level",
+        )

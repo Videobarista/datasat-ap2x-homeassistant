@@ -36,7 +36,8 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
     """Poll the AP20/AP25 over a persistent TCP connection.
 
     The processor has no standby command and is regularly switched off at the
-    rack, so an unreachable unit is reported as "off" rather than as an error.
+    rack, so an unreachable unit is normal operation: it is reported as "off"
+    and logged at debug level only.
     """
 
     config_entry: ConfigEntry
@@ -57,7 +58,7 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
         self._was_reachable: bool | None = None
 
     async def _async_update_data(self) -> Ap2xData:
-        """Read the operational state; never fail hard on an offline unit."""
+        """Read the operational state; an offline unit is not an error."""
         previous = self.data
         data = Ap2xData(last_seen=previous.last_seen if previous else None)
 
@@ -71,21 +72,23 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
             data.power_ok = await self.client.get_h336_volts_ok()
         except Ap2xConnectionError as err:
             if self._was_reachable is not False:
-                _LOGGER.info(
-                    "Datasat processor at %s is not responding, reporting it as off"
-                    " (%s)",
+                _LOGGER.debug(
+                    "Processor at %s stopped responding, reporting it as off: %s",
                     self.client.host,
                     err,
                 )
             self._was_reachable = False
             return data
         except Ap2xError as err:
-            _LOGGER.error("Unexpected error while polling %s: %s", self.client.host, err)
+            # The unit answered but the exchange went wrong: that is a real fault.
+            _LOGGER.error(
+                "Protocol error while polling %s: %s", self.client.host, err
+            )
             self._was_reachable = False
             return data
 
         if self._was_reachable is False:
-            _LOGGER.info("Datasat processor at %s is back online", self.client.host)
+            _LOGGER.debug("Processor at %s is responding again", self.client.host)
         self._was_reachable = True
         data.reachable = True
         data.last_seen = dt_util.utcnow()

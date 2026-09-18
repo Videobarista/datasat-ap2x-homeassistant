@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 
-from .api import Ap2xClient, Ap2xError, Ap2xSystemInfo
+from .api import Ap2xClient, Ap2xConnectionError, Ap2xError, Ap2xSystemInfo
 from .coordinator import Ap2xCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,12 +45,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool
     system = Ap2xSystemInfo()
     try:
         system = await client.get_system_info()
-    except Ap2xError as err:
-        # The unit may be switched off right now; identification is optional.
-        _LOGGER.info(
-            "Could not read identification from %s during setup: %s",
+    except Ap2xConnectionError as err:
+        # The unit is simply switched off; identification is optional.
+        _LOGGER.debug(
+            "No identification read from %s during setup: %s",
             entry.data[CONF_HOST],
             err,
+        )
+    except Ap2xError as err:
+        _LOGGER.warning(
+            "Could not read identification from %s: %s", entry.data[CONF_HOST], err
         )
 
     coordinator = Ap2xCoordinator(hass, entry, client)

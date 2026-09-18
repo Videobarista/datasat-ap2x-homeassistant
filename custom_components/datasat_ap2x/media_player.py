@@ -12,18 +12,14 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import Ap2xConfigEntry
-from .api import Ap2xError, send_wol
 from .const import (
     CONF_FORMATS,
-    CONF_MAC,
     CONF_POWER_OFF_MACRO,
     CONF_POWER_ON_MACRO,
     CONF_POWER_SWITCH,
-    CONF_USE_WOL,
     FADER_MAX,
 )
 from .entity import Ap2xEntity
@@ -61,10 +57,6 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
     def _power_switch(self) -> str | None:
         return self._entry.options.get(CONF_POWER_SWITCH) or None
 
-    @property
-    def _mac(self) -> str | None:
-        return self._entry.data.get(CONF_MAC) or self._runtime_data.system.mac
-
     # ---- State -----------------------------------------------------------
 
     @property
@@ -87,11 +79,7 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         )
         if self._formats:
             features |= MediaPlayerEntityFeature.SELECT_SOURCE
-        if (
-            self._power_switch
-            or self._entry.options.get(CONF_POWER_ON_MACRO)
-            or (self._entry.options.get(CONF_USE_WOL) and self._mac)
-        ):
+        if self._power_switch or self._entry.options.get(CONF_POWER_ON_MACRO):
             features |= MediaPlayerEntityFeature.TURN_ON
         if self._power_switch or self._entry.options.get(CONF_POWER_OFF_MACRO):
             features |= MediaPlayerEntityFeature.TURN_OFF
@@ -128,57 +116,59 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set the master fader."""
-        await self.coordinator.client.set_fader(round(volume * FADER_MAX))
-        await self.coordinator.async_request_refresh()
+        level = round(volume * FADER_MAX)
+        await self._async_send(
+            lambda: self.coordinator.client.set_fader(level), "set the fader"
+        )
 
     async def async_volume_up(self) -> None:
         """Raise the master fader by one tenth."""
-        await self.coordinator.client.set_fader((self.coordinator.data.fader or 0) + 1)
-        await self.coordinator.async_request_refresh()
+        level = (self.coordinator.data.fader or 0) + 1
+        await self._async_send(
+            lambda: self.coordinator.client.set_fader(level), "raise the fader"
+        )
 
     async def async_volume_down(self) -> None:
         """Lower the master fader by one tenth."""
-        await self.coordinator.client.set_fader((self.coordinator.data.fader or 0) - 1)
-        await self.coordinator.async_request_refresh()
+        level = (self.coordinator.data.fader or 0) - 1
+        await self._async_send(
+            lambda: self.coordinator.client.set_fader(level), "lower the fader"
+        )
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute or unmute the main outputs."""
-        await self.coordinator.client.set_muted(mute)
-        await self.coordinator.async_request_refresh()
+        await self._async_send(
+            lambda: self.coordinator.client.set_muted(mute), "change the mute state"
+        )
 
     async def async_select_source(self, source: str) -> None:
         """Select a format by name."""
-        await self.coordinator.client.set_format(source)
-        await self.coordinator.async_request_refresh()
+        await self._async_send(
+            lambda: self.coordinator.client.set_format(source),
+            f"select format '{source}'",
+        )
 
     async def async_turn_on(self) -> None:
-        """Power on through the configured switch, Wake-on-LAN and/or a macro."""
+        """Switch on the configured power switch, then run the power-on macro."""
         await self._call_power_switch(SERVICE_TURN_ON)
-
-        if self._entry.options.get(CONF_USE_WOL) and self._mac:
-            await self.hass.async_add_executor_job(send_wol, format_mac(self._mac))
 
         macro = self._entry.options.get(CONF_POWER_ON_MACRO)
         if macro:
-            try:
-                await self.coordinator.client.run_macro(macro)
-            except Ap2xError as err:
-                _LOGGER.debug(
-                    "Power-on macro '%s' could not be sent (unit still off?): %s",
-                    macro,
-                    err,
-                )
-
-        await self.coordinator.async_request_refresh()
+            await self._async_send(
+                lambda: self.coordinator.client.run_macro(macro),
+                f"run power-on macro '{macro}'",
+            )
+        else:
+            await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:
-        """Run the standby macro and/or switch off the configured power switch."""
+        """Run the standby macro, then switch off the configured power switch."""
         macro = self._entry.options.get(CONF_POWER_OFF_MACRO)
         if macro:
-            try:
-                await self.coordinator.client.run_macro(macro)
-            except Ap2xError as err:
-                _LOGGER.warning("Standby macro '%s' failed: %s", macro, err)
+            await self._async_send(
+                lambda: self.coordinator.client.run_macro(macro),
+                f"run standby macro '{macro}'",
+            )
 
         await self._call_power_switch(SERVICE_TURN_OFF)
         await self.coordinator.async_request_refresh()

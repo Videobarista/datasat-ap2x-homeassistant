@@ -44,13 +44,15 @@ class Ap2xMuteSwitch(Ap2xEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Mute the main outputs."""
-        await self.coordinator.client.set_muted(True)
-        await self.coordinator.async_request_refresh()
+        await self._async_send(
+            lambda: self.coordinator.client.set_muted(True), "mute the outputs"
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Unmute the main outputs."""
-        await self.coordinator.client.set_muted(False)
-        await self.coordinator.async_request_refresh()
+        await self._async_send(
+            lambda: self.coordinator.client.set_muted(False), "unmute the outputs"
+        )
 
 
 class Ap2xMonitorMuteSwitch(Ap2xEntity, SwitchEntity):
@@ -70,10 +72,14 @@ class Ap2xMonitorMuteSwitch(Ap2xEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Mute the monitor output."""
-        await self.coordinator.client.set_monitor_muted(True)
-        await self.coordinator.async_request_refresh()
+        await self._async_send(
+            lambda: self.coordinator.client.set_monitor_muted(True),
+            "mute the monitor output",
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Unmute the monitor output."""
-        await self.coordinator.client.set_monitor_muted(False)
-        await self.coordinator.async_request_refresh()
+        await self._async_send(
+            lambda: self.coordinator.client.set_monitor_muted(False),
+            "unmute the monitor output",
+        )

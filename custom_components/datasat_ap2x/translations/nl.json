@@ -30,12 +30,10 @@
           "power_switch": "Externe voedingsschakelaar (slimme stekker of relais)",
           "power_on_macro": "Macro die na inschakelen wordt uitgevoerd",
           "power_off_macro": "Macro die vóór uitschakelen wordt uitgevoerd",
-          "use_wol": "Ook een Wake-on-LAN-pakket sturen bij inschakelen",
           "scan_interval": "Poll-interval"
         },
         "data_description": {
-          "power_switch": "De processor heeft geen aan/uit-commando. Wijs hier de schakelaar aan die hem voedt om de voeding vanuit Home Assistant te regelen.",
-          "use_wol": "De meeste AP20/AP25-units ondersteunen geen Wake-on-LAN. Uit laten is prima."
+          "power_switch": "De processor heeft geen aan/uit-commando. Wijs hier de schakelaar aan die hem voedt om de voeding vanuit Home Assistant te regelen."
         }
       }
     }

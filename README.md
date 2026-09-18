@@ -48,22 +48,21 @@ Macros:   Showtime, Interval, Clean-up
 ```
 
 Also configurable there: an external power switch entity, macros to run around
-power on/off, Wake-on-LAN, and the poll interval (default 10 s).
+power on/off, and the poll interval (default 10 s).
 
 ## About power control
 
-**The AP20/AP25 has no power or standby command.** TN-H413 rev D exposes
-system information, health, format, fader, mute, monitor level and macros —
-nothing that switches the unit on or off, and there is no standby state to read
-back. Wake-on-LAN is not supported by the processor's network interface either;
-the option exists only because it costs nothing to try on unusual hardware.
+**The AP20/AP25 has no power or standby command.** TN-H413 rev D exposes system
+information, health, format, fader, mute, monitor level and macros — nothing
+that switches the unit on or off, and there is no standby state to read back.
+Wake-on-LAN is not supported by the processor either, so this integration does
+not pretend otherwise.
 
-What this integration does instead:
+What it does instead:
 
 - **Detects power state by reachability.** If the processor does not answer on
   port 14500, the media player reports *off*, the *Connection* sensor goes off
-  and *Last seen* keeps the timestamp of the last successful poll. An
-  unreachable unit is never logged as an error.
+  and *Last seen* keeps the timestamp of the last successful poll.
 - **Delegates real power control.** Point the *External power switch* option at
   a smart plug or relay that feeds the processor, and `media_player.turn_on` /
   `turn_off` will switch that entity. Note the usual rack order: mute or power
@@ -74,11 +73,21 @@ What this integration does instead:
 
 For everyday use, muting is the intended "off" for this class of device.
 
-## Compatibility
+## Logging
 
-Developed against the public TN-H413 rev D documentation. Feedback from real
-AP20/AP25 hardware is very welcome — please open an issue with the command and
-the response you see.
+A processor that is switched off is normal operation, not a fault: it is logged
+at debug level and the entities simply report *off*. Commands sent while the
+unit is unreachable are dropped and logged at debug level too. Protocol errors
+from a unit that *is* answering — a macro that does not exist, an unexpected
+response — are logged as warnings or errors.
+
+To follow what goes over the wire:
+
+```yaml
+logger:
+  logs:
+    custom_components.datasat_ap2x: debug
+```
 
 ## License
 
