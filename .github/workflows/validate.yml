@@ -14,19 +14,19 @@ permissions:
 jobs:
   hassfest:
     name: Home Assistant hassfest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Run hassfest
         uses: home-assistant/actions/hassfest@master
 
   hacs:
     name: HACS validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Run HACS validation
         uses: hacs/action@main
         with:
