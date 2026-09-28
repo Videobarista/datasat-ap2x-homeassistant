@@ -1,9 +1,9 @@
 # Datasat AP20/AP25 — Home Assistant integration
 
-[![Ruff](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/ruff.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/ruff.yml)
-[![hassfest](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml)
-[![HACS](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml)
-[![CodeQL](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml)
+[![Ruff](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/ruff.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/ruff.yml)
+[![hassfest](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml)
+[![HACS](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml)
+[![CodeQL](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/Videobarista/datasat-ap2x-homeassistant?display_name=tag)](https://github.com/Videobarista/datasat-ap2x-homeassistant/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -101,20 +101,6 @@ logger:
   logs:
     custom_components.datasat_ap2x: debug
 ```
-
-## Development
-
-Code style is enforced with [Ruff](https://docs.astral.sh/ruff/), configured in
-`ruff.toml` (line length 100, Home Assistant import conventions):
-
-```bash
-ruff check .
-ruff format --check .
-```
-
-Every push and pull request runs Ruff, hassfest, HACS validation and CodeQL;
-pull requests additionally run a dependency review. GitHub Actions versions are
-kept current by Dependabot.
 
 ## License
 
