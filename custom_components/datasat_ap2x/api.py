@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
+import logging
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,9 +42,8 @@ class Ap2xClient:
     byte after the final ``<CR>``.
     """
 
-    def __init__(
-        self, host: str, port: int = DEFAULT_PORT, password: str | None = None
-    ) -> None:
+    def __init__(self, host: str, port: int = DEFAULT_PORT, password: str | None = None) -> None:
+        """Store the connection details without opening a socket yet."""
         self.host = host
         self.port = port
         self.password = password
@@ -73,7 +72,7 @@ class Ap2xClient:
             try:
                 await self._connect_locked()
                 return await self._request_locked(cmd)
-            except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError) as err:
+            except (OSError, TimeoutError, asyncio.IncompleteReadError) as err:
                 await self._close_locked()
                 raise Ap2xConnectionError(
                     f"I/O error while sending '{cmd}' to {self.host}: {err}"
@@ -82,6 +81,7 @@ class Ap2xClient:
     # ---- Connection handling --------------------------------------------
 
     async def _connect_locked(self) -> None:
+        """Open the socket and authenticate. Caller holds the lock."""
         if self.connected:
             return
 
@@ -90,12 +90,10 @@ class Ap2xClient:
             self._reader, self._writer = await asyncio.wait_for(
                 asyncio.open_connection(self.host, self.port), _TIMEOUT
             )
-        except (OSError, asyncio.TimeoutError) as err:
+        except (OSError, TimeoutError) as err:
             self._reader = None
             self._writer = None
-            raise Ap2xConnectionError(
-                f"Cannot connect to {self.host}:{self.port}: {err}"
-            ) from err
+            raise Ap2xConnectionError(f"Cannot connect to {self.host}:{self.port}: {err}") from err
 
         if self.password:
             reply = await self._request_locked(f"AUTH {self.password}")
@@ -105,6 +103,7 @@ class Ap2xClient:
             _LOGGER.debug("Authenticated: %s", reply)
 
     async def _close_locked(self) -> None:
+        """Close the socket. Caller holds the lock."""
         writer = self._writer
         self._reader = None
         self._writer = None
@@ -117,6 +116,7 @@ class Ap2xClient:
             _LOGGER.debug("Error while closing connection to %s: %s", self.host, err)
 
     async def _request_locked(self, cmd: str) -> str:
+        """Write one command and read its reply. Caller holds the lock."""
         reader = self._reader
         writer = self._writer
         if reader is None or writer is None:
@@ -129,7 +129,7 @@ class Ap2xClient:
         _LOGGER.debug("%s -> %s", cmd, text)
         return text
 
-    # ---- Read-only information ------------------------------------------
+    # ---- Commands --------------------------------------------------------
 
     async def get_system_info(self) -> Ap2xSystemInfo:
         """Read the static identification of the unit."""
@@ -222,6 +222,7 @@ class Ap2xClient:
         return await self._volts_ok("H331VOLTS")
 
     async def _volts_ok(self, sub_cmd: str) -> bool | None:
+        """Read one HEALTH voltage record and return its overall status flag."""
         reply = await self.command(f"HEALTH {sub_cmd}")
         field = _text_arg(reply)
         if not field or field.upper() == "NA":
@@ -231,9 +232,6 @@ class Ap2xClient:
             return first == "1"
         _LOGGER.debug("Unexpected %s response: %s", sub_cmd, reply)
         return None
-
-
-# ---- Parsing helpers -----------------------------------------------------
 
 
 def _text_arg(reply: str) -> str | None:

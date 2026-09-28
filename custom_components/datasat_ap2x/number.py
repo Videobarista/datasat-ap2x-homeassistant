@@ -5,16 +5,16 @@ from __future__ import annotations
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import Ap2xConfigEntry
+from . import Ap2xConfigEntry, Ap2xRuntimeData
 from .entity import Ap2xEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: Ap2xConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the fader and monitor level entities."""
     runtime_data = entry.runtime_data
@@ -36,7 +36,7 @@ class Ap2xFaderNumber(Ap2xEntity, NumberEntity):
     _attr_mode = NumberMode.SLIDER
     _attr_icon = "mdi:tune-vertical"
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the fader entity."""
         super().__init__(runtime_data, entry, "fader")
 
@@ -49,9 +49,7 @@ class Ap2xFaderNumber(Ap2xEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the fader position in front-panel units."""
         tenths = round(value * 10)
-        await self._async_send(
-            lambda: self.coordinator.client.set_fader(tenths), "set the fader"
-        )
+        await self._async_send(lambda: self.coordinator.client.set_fader(tenths), "set the fader")
 
 
 class Ap2xMonitorLevelNumber(Ap2xEntity, NumberEntity):
@@ -65,7 +63,7 @@ class Ap2xMonitorLevelNumber(Ap2xEntity, NumberEntity):
     _attr_icon = "mdi:speaker-message"
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the monitor level entity."""
         super().__init__(runtime_data, entry, "monitor_level")
 
@@ -78,6 +76,5 @@ class Ap2xMonitorLevelNumber(Ap2xEntity, NumberEntity):
         """Set the monitor level."""
         level = int(value)
         await self._async_send(
-            lambda: self.coordinator.client.set_monitor_level(level),
-            "set the monitor level",
+            lambda: self.coordinator.client.set_monitor_level(level), "set the monitor level"
         )

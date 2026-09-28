@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
@@ -12,9 +10,9 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import Ap2xConfigEntry
+from . import Ap2xConfigEntry, Ap2xRuntimeData
 from .const import (
     CONF_FORMATS,
     CONF_POWER_OFF_MACRO,
@@ -24,40 +22,36 @@ from .const import (
 )
 from .entity import Ap2xEntity
 
-_LOGGER = logging.getLogger(__name__)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: Ap2xConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the media player for this processor."""
     async_add_entities([Ap2xMediaPlayer(entry.runtime_data, entry)])
 
 
 class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
-    """The processor as a media player: volume is the master fader, source the format."""
+    """The processor as a media player: volume is the fader, source the format."""
 
     _attr_name = None
     _attr_device_class = MediaPlayerDeviceClass.RECEIVER
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the media player entity."""
         super().__init__(runtime_data, entry, "media_player")
 
-    # ---- Configuration helpers ------------------------------------------
-
     @property
     def _formats(self) -> list[str]:
+        """Return the format names configured in the options."""
         raw = self._entry.options.get(CONF_FORMATS, "")
         return [item.strip() for item in raw.split(",") if item.strip()]
 
     @property
     def _power_switch(self) -> str | None:
+        """Return the external switch entity that feeds the processor."""
         return self._entry.options.get(CONF_POWER_SWITCH) or None
-
-    # ---- State -----------------------------------------------------------
 
     @property
     def available(self) -> bool:
@@ -112,28 +106,20 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         fader = self.coordinator.data.fader
         return {"fader": None if fader is None else fader / 10}
 
-    # ---- Commands --------------------------------------------------------
-
     async def async_set_volume_level(self, volume: float) -> None:
         """Set the master fader."""
         level = round(volume * FADER_MAX)
-        await self._async_send(
-            lambda: self.coordinator.client.set_fader(level), "set the fader"
-        )
+        await self._async_send(lambda: self.coordinator.client.set_fader(level), "set the fader")
 
     async def async_volume_up(self) -> None:
         """Raise the master fader by one tenth."""
         level = (self.coordinator.data.fader or 0) + 1
-        await self._async_send(
-            lambda: self.coordinator.client.set_fader(level), "raise the fader"
-        )
+        await self._async_send(lambda: self.coordinator.client.set_fader(level), "raise the fader")
 
     async def async_volume_down(self) -> None:
         """Lower the master fader by one tenth."""
         level = (self.coordinator.data.fader or 0) - 1
-        await self._async_send(
-            lambda: self.coordinator.client.set_fader(level), "lower the fader"
-        )
+        await self._async_send(lambda: self.coordinator.client.set_fader(level), "lower the fader")
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute or unmute the main outputs."""
@@ -144,8 +130,7 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
     async def async_select_source(self, source: str) -> None:
         """Select a format by name."""
         await self._async_send(
-            lambda: self.coordinator.client.set_format(source),
-            f"select format '{source}'",
+            lambda: self.coordinator.client.set_format(source), f"select format '{source}'"
         )
 
     async def async_turn_on(self) -> None:
@@ -155,8 +140,7 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         macro = self._entry.options.get(CONF_POWER_ON_MACRO)
         if macro:
             await self._async_send(
-                lambda: self.coordinator.client.run_macro(macro),
-                f"run power-on macro '{macro}'",
+                lambda: self.coordinator.client.run_macro(macro), f"run power-on macro '{macro}'"
             )
         else:
             await self.coordinator.async_request_refresh()
@@ -166,8 +150,7 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         macro = self._entry.options.get(CONF_POWER_OFF_MACRO)
         if macro:
             await self._async_send(
-                lambda: self.coordinator.client.run_macro(macro),
-                f"run standby macro '{macro}'",
+                lambda: self.coordinator.client.run_macro(macro), f"run standby macro '{macro}'"
             )
 
         await self._call_power_switch(SERVICE_TURN_OFF)

@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    BinarySensorEntity,
-)
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import Ap2xConfigEntry
+from . import Ap2xConfigEntry, Ap2xRuntimeData
 from .entity import Ap2xEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: Ap2xConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the connectivity and power-supply sensors."""
     runtime_data = entry.runtime_data
@@ -36,7 +33,7 @@ class Ap2xConnectivitySensor(Ap2xEntity, BinarySensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Connection"
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the connectivity sensor."""
         super().__init__(runtime_data, entry, "connectivity")
 
@@ -52,13 +49,13 @@ class Ap2xConnectivitySensor(Ap2xEntity, BinarySensorEntity):
 
 
 class Ap2xPowerSupplySensor(Ap2xEntity, BinarySensorEntity):
-    """Problem sensor based on the H336 vok flag: on means a rail is out of limits."""
+    """Problem sensor for the H336 rails: on means a voltage is out of limits."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Power supply fault"
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the power-supply sensor."""
         super().__init__(runtime_data, entry, "psu_fault")
 

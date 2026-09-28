@@ -4,16 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    SensorEntity,
-    SensorStateClass,
-)
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import Ap2xConfigEntry
+from . import Ap2xConfigEntry, Ap2xRuntimeData
 from .entity import Ap2xEntity
 
 BOARDS = ("H331", "H332", "H335")
@@ -22,7 +18,7 @@ BOARDS = ("H331", "H332", "H335")
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: Ap2xConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the diagnostic sensors."""
     runtime_data = entry.runtime_data
@@ -43,7 +39,11 @@ class Ap2xTemperatureSensor(Ap2xEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
-        self, runtime_data, entry: Ap2xConfigEntry, index: int, board: str
+        self,
+        runtime_data: Ap2xRuntimeData,
+        entry: Ap2xConfigEntry,
+        index: int,
+        board: str,
     ) -> None:
         """Initialise the temperature sensor for one board."""
         super().__init__(runtime_data, entry, f"temp_{board.lower()}")
@@ -53,10 +53,7 @@ class Ap2xTemperatureSensor(Ap2xEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Only available when this board reported a value."""
-        return (
-            super().available
-            and len(self.coordinator.data.temperatures) > self._index
-        )
+        return super().available and len(self.coordinator.data.temperatures) > self._index
 
     @property
     def native_value(self) -> float | None:
@@ -74,7 +71,7 @@ class Ap2xLastSeenSensor(Ap2xEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Last seen"
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the last-seen sensor."""
         super().__init__(runtime_data, entry, "last_seen")
 

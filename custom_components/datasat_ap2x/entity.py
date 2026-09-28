@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable
+import logging
 from typing import Any
 
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -21,7 +21,7 @@ class Ap2xEntity(CoordinatorEntity[Ap2xCoordinator]):
 
     _attr_has_entity_name = True
 
-    def __init__(self, runtime_data, entry, key: str) -> None:
+    def __init__(self, runtime_data: Any, entry: Any, key: str) -> None:
         """Set up device info and the unique id for this entity."""
         super().__init__(runtime_data.coordinator)
         self._entry = entry
@@ -46,31 +46,20 @@ class Ap2xEntity(CoordinatorEntity[Ap2xCoordinator]):
         """Entities other than the media player follow the connection state."""
         return super().available and self._online
 
-    async def _async_send(
-        self, action: Callable[[], Awaitable[Any]], description: str
-    ) -> None:
+    async def _async_send(self, action: Callable[[], Awaitable[Any]], description: str) -> None:
         """Run one command and refresh, tolerating a processor that is switched off.
 
         Pressing a button while the unit is off is normal in a projection booth,
         so that is logged at debug level. Anything else is a real fault.
         """
+        host = self.coordinator.client.host
         try:
             await action()
         except Ap2xConnectionError as err:
-            _LOGGER.debug(
-                "Could not %s: processor at %s is not reachable (%s)",
-                description,
-                self.coordinator.client.host,
-                err,
-            )
+            _LOGGER.debug("Could not %s: %s is not reachable (%s)", description, host, err)
             return
         except Ap2xError as err:
-            _LOGGER.error(
-                "Failed to %s on %s: %s",
-                description,
-                self.coordinator.client.host,
-                err,
-            )
+            _LOGGER.error("Failed to %s on %s: %s", description, host, err)
             return
 
         await self.coordinator.async_request_refresh()

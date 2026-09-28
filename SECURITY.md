@@ -6,8 +6,8 @@ Only the latest released version of this integration receives fixes.
 
 | Version | Supported |
 | ------- | --------- |
-| 1.2.x   | Yes       |
-| < 1.2   | No        |
+| 1.3.x   | Yes       |
+| < 1.3   | No        |
 
 ## Reporting a vulnerability
 
@@ -34,6 +34,9 @@ API (TN-H413). A few properties of that protocol are worth knowing:
   operator-level command for as long as it stays open.
 - **Local network only.** The integration makes no outbound connections other
   than to the configured processor, and sends no telemetry.
+
+The integration has no Python dependencies of its own. GitHub Actions used in CI
+are monitored by Dependabot and reviewed on every pull request.
 
 Issues in Home Assistant itself belong at
 [home-assistant/core](https://github.com/home-assistant/core/security/policy);

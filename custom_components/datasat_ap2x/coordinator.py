@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -42,9 +42,7 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
 
     config_entry: ConfigEntry
 
-    def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, client: Ap2xClient
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: Ap2xClient) -> None:
         """Initialise the coordinator with the configured poll interval."""
         interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         super().__init__(
@@ -81,9 +79,7 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
             return data
         except Ap2xError as err:
             # The unit answered but the exchange went wrong: that is a real fault.
-            _LOGGER.error(
-                "Protocol error while polling %s: %s", self.client.host, err
-            )
+            _LOGGER.error("Protocol error while polling %s: %s", self.client.host, err)
             self._was_reachable = False
             return data
 

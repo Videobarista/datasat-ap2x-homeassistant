@@ -6,16 +6,16 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import Ap2xConfigEntry
+from . import Ap2xConfigEntry, Ap2xRuntimeData
 from .entity import Ap2xEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: Ap2xConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the mute switches."""
     runtime_data = entry.runtime_data
@@ -33,7 +33,7 @@ class Ap2xMuteSwitch(Ap2xEntity, SwitchEntity):
     _attr_name = "Mute"
     _attr_icon = "mdi:volume-off"
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the master mute switch."""
         super().__init__(runtime_data, entry, "mute")
 
@@ -44,9 +44,7 @@ class Ap2xMuteSwitch(Ap2xEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Mute the main outputs."""
-        await self._async_send(
-            lambda: self.coordinator.client.set_muted(True), "mute the outputs"
-        )
+        await self._async_send(lambda: self.coordinator.client.set_muted(True), "mute the outputs")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Unmute the main outputs."""
@@ -61,7 +59,7 @@ class Ap2xMonitorMuteSwitch(Ap2xEntity, SwitchEntity):
     _attr_name = "Monitor mute"
     _attr_icon = "mdi:speaker-off"
 
-    def __init__(self, runtime_data, entry: Ap2xConfigEntry) -> None:
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
         """Initialise the monitor mute switch."""
         super().__init__(runtime_data, entry, "monitor_mute")
 
@@ -73,13 +71,11 @@ class Ap2xMonitorMuteSwitch(Ap2xEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Mute the monitor output."""
         await self._async_send(
-            lambda: self.coordinator.client.set_monitor_muted(True),
-            "mute the monitor output",
+            lambda: self.coordinator.client.set_monitor_muted(True), "mute the monitor output"
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Unmute the monitor output."""
         await self._async_send(
-            lambda: self.coordinator.client.set_monitor_muted(False),
-            "unmute the monitor output",
+            lambda: self.coordinator.client.set_monitor_muted(False), "unmute the monitor output"
         )

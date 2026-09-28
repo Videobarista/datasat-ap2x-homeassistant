@@ -7,12 +7,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import (
-    ConfigEntry,
-    ConfigFlow,
-    ConfigFlowResult,
-    OptionsFlow,
-)
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.helpers import selector
@@ -41,9 +36,7 @@ USER_SCHEMA = vol.Schema(
             selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
         ),
         vol.Required(CONF_PORT, default=DEFAULT_PORT): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=1, max=65535, mode=selector.NumberSelectorMode.BOX
-            )
+            selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
         ),
         vol.Optional(CONF_PASSWORD, default=""): selector.TextSelector(
             selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
@@ -57,9 +50,7 @@ class Ap2xConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Ask for connection details and verify them against the processor."""
         errors: dict[str, str] = {}
 
@@ -96,9 +87,7 @@ class Ap2xConfigFlow(ConfigFlow, domain=DOMAIN):
                     },
                 )
 
-        return self.async_show_form(
-            step_id="user", data_schema=USER_SCHEMA, errors=errors
-        )
+        return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
 
     @staticmethod
     @callback
@@ -110,16 +99,10 @@ class Ap2xConfigFlow(ConfigFlow, domain=DOMAIN):
 class Ap2xOptionsFlow(OptionsFlow):
     """Options: formats, macros, power control and poll interval."""
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Show and store the options."""
         if user_input is not None:
-            cleaned = {
-                key: value
-                for key, value in user_input.items()
-                if value not in ("", None)
-            }
+            cleaned = {key: value for key, value in user_input.items() if value not in ("", None)}
             return self.async_create_entry(title="", data=cleaned)
 
         options = self.config_entry.options
@@ -137,9 +120,7 @@ class Ap2xOptionsFlow(OptionsFlow):
                     CONF_POWER_SWITCH,
                     description={"suggested_value": options.get(CONF_POWER_SWITCH)},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain=["switch", "input_boolean", "light"]
-                    )
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean", "light"])
                 ),
                 vol.Optional(
                     CONF_POWER_ON_MACRO,

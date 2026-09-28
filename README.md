@@ -1,8 +1,13 @@
 # Datasat AP20/AP25 — Home Assistant integration
 
+[![Ruff](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/ruff.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/ruff.yml)
+[![hassfest](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml)
+[![HACS](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml)
+[![CodeQL](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/Videobarista/datasat-ap2x-homeassistant?display_name=tag)](https://github.com/Videobarista/datasat-ap2x-homeassistant/releases)
-[![Validate](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/validate.yml/badge.svg)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/validate.yml)
-[![HACS: custom](https://img.shields.io/badge/HACS-custom-41BDF5.svg)](https://hacs.xyz)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Videobarista&repository=datasat-ap2x-homeassistant&category=integration)
 
 Custom integration for the Datasat AP20 and AP25 cinema audio processors, using
 the TN-H413 rev D remote command API over TCP (port 14500).
@@ -26,12 +31,20 @@ Other properties: optional NetCmd/Setup password (`@AUTH` on connect), a single
 persistent TCP connection with automatic reconnect, and polling so Home
 Assistant follows changes made on the front panel or by other controllers.
 
+Audio metering is not available: the remote command API exposes settings and
+health data only, with no level or metering command.
+
+## Requirements
+
+Home Assistant 2025.2 or newer.
+
 ## Installation
 
-HACS → ⋮ → *Custom repositories* → add
-`https://github.com/Videobarista/datasat-ap2x-homeassistant` as category
-*Integration*. Or copy `custom_components/datasat_ap2x` into your Home
-Assistant `custom_components` folder.
+Use the badge above, or add
+`https://github.com/Videobarista/datasat-ap2x-homeassistant` as a custom
+repository in HACS with category *Integration*. Alternatively, copy
+`custom_components/datasat_ap2x` into your Home Assistant `custom_components`
+folder.
 
 Restart Home Assistant, then add it via *Settings → Devices & services → Add
 integration → Datasat AP20/AP25*. Enter the IP address and, if the unit has one
@@ -88,6 +101,20 @@ logger:
   logs:
     custom_components.datasat_ap2x: debug
 ```
+
+## Development
+
+Code style is enforced with [Ruff](https://docs.astral.sh/ruff/), configured in
+`ruff.toml` (line length 100, Home Assistant import conventions):
+
+```bash
+ruff check .
+ruff format --check .
+```
+
+Every push and pull request runs Ruff, hassfest, HACS validation and CodeQL;
+pull requests additionally run a dependency review. GitHub Actions versions are
+kept current by Dependabot.
 
 ## License
 

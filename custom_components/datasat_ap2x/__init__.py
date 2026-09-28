@@ -47,15 +47,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool
         system = await client.get_system_info()
     except Ap2xConnectionError as err:
         # The unit is simply switched off; identification is optional.
-        _LOGGER.debug(
-            "No identification read from %s during setup: %s",
-            entry.data[CONF_HOST],
-            err,
-        )
+        _LOGGER.debug("No identification read from %s during setup: %s", entry.data[CONF_HOST], err)
     except Ap2xError as err:
-        _LOGGER.warning(
-            "Could not read identification from %s: %s", entry.data[CONF_HOST], err
-        )
+        _LOGGER.warning("Could not read identification from %s: %s", entry.data[CONF_HOST], err)
 
     coordinator = Ap2xCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
