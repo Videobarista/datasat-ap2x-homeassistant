@@ -1,0 +1,14 @@
+pulse:
+  target:
+    entity:
+      integration: datasat_ap2x
+      domain: media_player
+  fields:
+    gpio:
+      required: true
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 21
+          mode: box

@@ -23,17 +23,29 @@
     "step": {
       "init": {
         "title": "Datasat AP20/AP25-opties",
-        "description": "De API kan geen formats of macro's opsommen; vul hun namen exact in zoals ze op het apparaat geprogrammeerd zijn, gescheiden door komma's.",
+        "description": "Formats en macro's worden uit de processor gelezen als de firmware dat ondersteunt. Vul deze alleen in als die lijsten leeg blijven; namen moeten exact overeenkomen.",
         "data": {
-          "formats": "Formats (kommagescheiden, exacte namen)",
-          "macros": "Macro's die een knop krijgen (kommagescheiden)",
+          "formats": "Formats, terugval (kommagescheiden, exacte namen)",
+          "macros": "Macro's, terugval (kommagescheiden, exacte namen)",
           "power_switch": "Externe voedingsschakelaar (slimme stekker of relais)",
           "power_on_macro": "Macro die na inschakelen wordt uitgevoerd",
           "power_off_macro": "Macro die vóór uitschakelen wordt uitgevoerd",
           "scan_interval": "Poll-interval"
         },
         "data_description": {
-          "power_switch": "De processor heeft geen aan/uit-commando. Wijs hier de schakelaar aan die hem voedt om de voeding vanuit Home Assistant te regelen."
+          "power_switch": "Alleen nodig als de processor het POWER-commando niet accepteert. Wijs hier de schakelaar aan die hem voedt."
+        }
+      }
+    }
+  },
+  "services": {
+    "pulse": {
+      "name": "Puls op een GPIO-uitgang",
+      "description": "Geeft een puls van 250 ms op een van de GPIO-uitgangen. Werkt alleen op units waarvan de firmware het PULSE-commando accepteert.",
+      "fields": {
+        "gpio": {
+          "name": "GPIO-nummer",
+          "description": "De GPIO-uitgang die een puls krijgt, 1 tot en met 21."
         }
       }
     }

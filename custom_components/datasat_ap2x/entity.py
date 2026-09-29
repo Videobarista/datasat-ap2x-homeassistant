@@ -37,14 +37,24 @@ class Ap2xEntity(CoordinatorEntity[Ap2xCoordinator]):
         )
 
     @property
+    def _capabilities(self):
+        """Return the commands this unit was found to accept."""
+        return self._runtime_data.capabilities
+
+    @property
     def _online(self) -> bool:
         """Return True when the last poll reached the processor."""
         return bool(self.coordinator.data and self.coordinator.data.reachable)
 
     @property
+    def _awake(self) -> bool:
+        """Return True when the unit answers and is not in standby."""
+        return self._online and self.coordinator.data.power is not False
+
+    @property
     def available(self) -> bool:
         """Entities other than the media player follow the connection state."""
-        return super().available and self._online
+        return super().available and self._awake
 
     async def _async_send(self, action: Callable[[], Awaitable[Any]], description: str) -> None:
         """Run one command and refresh, tolerating a processor that is switched off.

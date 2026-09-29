@@ -14,8 +14,13 @@ CONF_SCAN_INTERVAL = "scan_interval"
 DEFAULT_SCAN_INTERVAL = 10  # seconds
 MIN_SCAN_INTERVAL = 2
 MAX_SCAN_INTERVAL = 300
+HEALTH_INTERVAL = 60  # seconds between temperature and voltage reads
 
 MANUFACTURER = "Datasat Digital Entertainment"
 MODEL = "AP20/AP25"
 
 FADER_MAX = 100  # tenths; 100 == 10.0 on the front panel
+POWER_ON_DELAY = 20  # seconds the unit needs after leaving standby
+
+SERVICE_PULSE = "pulse"
+ATTR_GPIO = "gpio"

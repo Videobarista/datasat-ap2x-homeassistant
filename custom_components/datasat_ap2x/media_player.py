@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import voluptuous as vol
+
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
@@ -10,15 +12,19 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import Ap2xConfigEntry, Ap2xRuntimeData
+from .api import MAX_GPIO, MIN_GPIO
 from .const import (
+    ATTR_GPIO,
     CONF_FORMATS,
     CONF_POWER_OFF_MACRO,
     CONF_POWER_ON_MACRO,
     CONF_POWER_SWITCH,
     FADER_MAX,
+    SERVICE_PULSE,
 )
 from .entity import Ap2xEntity
 
@@ -28,8 +34,15 @@ async def async_setup_entry(
     entry: Ap2xConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the media player for this processor."""
+    """Set up the media player and register the GPIO pulse service."""
     async_add_entities([Ap2xMediaPlayer(entry.runtime_data, entry)])
+
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        SERVICE_PULSE,
+        {vol.Required(ATTR_GPIO): vol.All(vol.Coerce(int), vol.Range(min=MIN_GPIO, max=MAX_GPIO))},
+        "async_pulse",
+    )
 
 
 class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
@@ -44,7 +57,9 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
 
     @property
     def _formats(self) -> list[str]:
-        """Return the format names configured in the options."""
+        """Return the format names, read from the unit when it supports listing them."""
+        if self._capabilities.format_names:
+            return self._capabilities.format_names
         raw = self._entry.options.get(CONF_FORMATS, "")
         return [item.strip() for item in raw.split(",") if item.strip()]
 
@@ -60,12 +75,12 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
 
     @property
     def state(self) -> MediaPlayerState:
-        """Report on when the processor answers, off when it does not."""
-        return MediaPlayerState.ON if self._online else MediaPlayerState.OFF
+        """Report standby and unreachable units as off."""
+        return MediaPlayerState.ON if self._awake else MediaPlayerState.OFF
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
-        """Expose the features that are actually configured."""
+        """Expose the features that this unit and this configuration support."""
         features = (
             MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_STEP
@@ -73,9 +88,17 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         )
         if self._formats:
             features |= MediaPlayerEntityFeature.SELECT_SOURCE
-        if self._power_switch or self._entry.options.get(CONF_POWER_ON_MACRO):
+        if (
+            self._capabilities.power
+            or self._power_switch
+            or self._entry.options.get(CONF_POWER_ON_MACRO)
+        ):
             features |= MediaPlayerEntityFeature.TURN_ON
-        if self._power_switch or self._entry.options.get(CONF_POWER_OFF_MACRO):
+        if (
+            self._capabilities.power
+            or self._power_switch
+            or self._entry.options.get(CONF_POWER_OFF_MACRO)
+        ):
             features |= MediaPlayerEntityFeature.TURN_OFF
         return features
 
@@ -97,14 +120,21 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str] | None:
-        """Return the configured format names."""
+        """Return the known format names."""
         return self._formats or None
 
     @property
-    def extra_state_attributes(self) -> dict[str, float | None]:
-        """Expose the fader in the unit used on the front panel."""
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose the fader and, where supported, the volume in dB."""
         fader = self.coordinator.data.fader
-        return {"fader": None if fader is None else fader / 10}
+        attributes: dict[str, object] = {"fader": None if fader is None else fader / 10}
+        volume_db = self.coordinator.data.volume_db
+        if volume_db is not None:
+            attributes["volume_db"] = -volume_db / 10
+        attributes["format_list_source"] = (
+            self._capabilities.names_command if self._capabilities.format_names else "options"
+        )
+        return attributes
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set the master fader."""
@@ -133,24 +163,40 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
             lambda: self.coordinator.client.set_format(source), f"select format '{source}'"
         )
 
+    async def async_pulse(self, gpio: int) -> None:
+        """Fire a 250 ms pulse on a GPIO output."""
+        await self._async_send(
+            lambda: self.coordinator.client.pulse_gpio(gpio), f"pulse GPIO {gpio}"
+        )
+
     async def async_turn_on(self) -> None:
-        """Switch on the configured power switch, then run the power-on macro."""
+        """Leave standby, using the unit's own power command where available."""
         await self._call_power_switch(SERVICE_TURN_ON)
+
+        if self._capabilities.power:
+            await self._async_send(
+                lambda: self.coordinator.client.set_power(True), "leave standby"
+            )
 
         macro = self._entry.options.get(CONF_POWER_ON_MACRO)
         if macro:
             await self._async_send(
                 lambda: self.coordinator.client.run_macro(macro), f"run power-on macro '{macro}'"
             )
-        else:
-            await self.coordinator.async_request_refresh()
+
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:
-        """Run the standby macro, then switch off the configured power switch."""
+        """Run the standby macro, then put the unit in standby."""
         macro = self._entry.options.get(CONF_POWER_OFF_MACRO)
         if macro:
             await self._async_send(
                 lambda: self.coordinator.client.run_macro(macro), f"run standby macro '{macro}'"
+            )
+
+        if self._capabilities.power:
+            await self._async_send(
+                lambda: self.coordinator.client.set_power(False), "enter standby"
             )
 
         await self._call_power_switch(SERVICE_TURN_OFF)

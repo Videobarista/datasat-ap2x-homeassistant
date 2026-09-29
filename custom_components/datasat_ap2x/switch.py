@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -17,14 +18,15 @@ async def async_setup_entry(
     entry: Ap2xConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the mute switches."""
+    """Set up the mute switches and, where supported, the screensaver."""
     runtime_data = entry.runtime_data
-    async_add_entities(
-        [
-            Ap2xMuteSwitch(runtime_data, entry),
-            Ap2xMonitorMuteSwitch(runtime_data, entry),
-        ]
-    )
+    entities: list[SwitchEntity] = [
+        Ap2xMuteSwitch(runtime_data, entry),
+        Ap2xMonitorMuteSwitch(runtime_data, entry),
+    ]
+    if runtime_data.capabilities.screensaver:
+        entities.append(Ap2xScreensaverSwitch(runtime_data, entry))
+    async_add_entities(entities)
 
 
 class Ap2xMuteSwitch(Ap2xEntity, SwitchEntity):
@@ -79,3 +81,38 @@ class Ap2xMonitorMuteSwitch(Ap2xEntity, SwitchEntity):
         await self._async_send(
             lambda: self.coordinator.client.set_monitor_muted(False), "unmute the monitor output"
         )
+
+
+class Ap2xScreensaverSwitch(Ap2xEntity, SwitchEntity):
+    """Front panel screensaver (@SCR). The unit cannot report its current state."""
+
+    _attr_name = "Screensaver"
+    _attr_icon = "mdi:monitor-off"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_assumed_state = True
+
+    def __init__(self, runtime_data: Ap2xRuntimeData, entry: Ap2xConfigEntry) -> None:
+        """Initialise the screensaver switch."""
+        super().__init__(runtime_data, entry, "screensaver")
+        self._showing = False
+
+    @property
+    def is_on(self) -> bool:
+        """Return the last state this integration set."""
+        return self._showing
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Show the screensaver."""
+        await self._async_send(
+            lambda: self.coordinator.client.set_screensaver(True), "show the screensaver"
+        )
+        self._showing = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Wake the front panel display."""
+        await self._async_send(
+            lambda: self.coordinator.client.set_screensaver(False), "wake the display"
+        )
+        self._showing = False
+        self.async_write_ha_state()

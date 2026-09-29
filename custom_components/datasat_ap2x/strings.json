@@ -23,17 +23,29 @@
     "step": {
       "init": {
         "title": "Datasat AP20/AP25 options",
-        "description": "The API cannot list formats or macros, so enter their names exactly as programmed on the unit, separated by commas.",
+        "description": "Formats and macros are read from the processor when its firmware supports listing them. Fill these in only if the lists below stay empty; names must match the unit exactly.",
         "data": {
-          "formats": "Formats (comma separated, exact names)",
-          "macros": "Macros to expose as buttons (comma separated)",
+          "formats": "Formats, fallback (comma separated, exact names)",
+          "macros": "Macros, fallback (comma separated, exact names)",
           "power_switch": "External power switch entity (smart plug or relay)",
           "power_on_macro": "Macro to run after powering on",
           "power_off_macro": "Macro to run before powering off",
           "scan_interval": "Poll interval"
         },
         "data_description": {
-          "power_switch": "The processor has no power command. Point this at the switch that feeds it to control power from Home Assistant."
+          "power_switch": "Only needed if the processor does not accept the POWER command. Point this at the switch that feeds it."
+        }
+      }
+    }
+  },
+  "services": {
+    "pulse": {
+      "name": "Pulse a GPIO output",
+      "description": "Fires a 250 ms pulse on one of the GPIO outputs. Only works on units whose firmware accepts the PULSE command.",
+      "fields": {
+        "gpio": {
+          "name": "GPIO number",
+          "description": "The GPIO output to pulse, 1 to 21."
         }
       }
     }

@@ -18,21 +18,61 @@ the TN-H413 rev D remote command API over TCP (port 14500).
 | --- | --- |
 | `media_player` | Master fader as volume, mute, format as source, power |
 | `number` — Master fader | Fader in front-panel units (0.0–10.0) |
+| `number` — Master volume | Volume in dB, if the unit accepts `@VOLUME` |
 | `number` — Monitor level | Booth monitor level, 0–100 (`@MONITORLEVEL`) |
 | `switch` — Mute | Master mute (`@MUTED`) |
 | `switch` — Monitor mute | Booth monitor mute (`@MONITORMUTE`) |
-| `button` — Macro … | One button per configured macro (`@RUNMACRO`) |
+| `switch` — Screensaver | Front panel screensaver, if the unit accepts `@SCR` |
+| `button` — Macro … | One button per macro (`@RUNMACRO`) |
 | `sensor` — H331/H332/H335 temperature | Board temperatures (`@HEALTH TEMPERATURE`) |
 | `sensor` — Last seen | When the processor last answered |
 | `binary_sensor` — Connection | On while the processor responds |
-| `binary_sensor` — Power supply fault | H336 rails out of limits (`@HEALTH H336VOLTS`) |
+| `binary_sensor` — H331…H338 supply fault | Per-board supply rails (`@HEALTH …VOLTS`) |
+| `binary_sensor` — CPU supply fault | The H336 `vcpu` flag |
+| `binary_sensor` — Phantom power | The H336 48 V rail |
 
 Other properties: optional NetCmd/Setup password (`@AUTH` on connect), a single
 persistent TCP connection with automatic reconnect, and polling so Home
 Assistant follows changes made on the front panel or by other controllers.
+Temperatures and supply voltages are read about once a minute; everything else
+every poll cycle.
 
 Audio metering is not available: the remote command API exposes settings and
 health data only, with no level or metering command.
+
+## Undocumented commands
+
+The AP20/AP25 technote (TN-H413 rev D) documents fewer commands than the one for
+its sibling RS20i (TN-H413-01), even though both share a firmware family — the
+RS20i's `@IDENTIFY` even answers with `AP20`. This integration probes the extra
+commands once at setup and enables the matching features only when the unit
+actually answers:
+
+| Command | Feature it enables |
+| --- | --- |
+| `@POWER 0/1` | Real standby control and power state on the media player |
+| `@FORMATNAMES` or `@INPUTNAMES` | Format dropdown filled from the unit itself |
+| `@MACRONAMES` | A button per macro, without typing names |
+| `@VOLUME` | Master volume in dB alongside the fader |
+| `@SCR ON/OFF` | Screensaver switch |
+| `@PULSE 1-21` | `datasat_ap2x.pulse` service for the GPIO outputs |
+
+A probe costs one command and a few seconds at setup, and a unit that does not
+know a command simply does not answer — the feature then stays hidden and the
+manual fallbacks in the options are used instead. What was detected is visible
+in the integration's diagnostics download.
+
+## Services
+
+`datasat_ap2x.pulse` fires a 250 ms pulse on a GPIO output:
+
+```yaml
+action: datasat_ap2x.pulse
+target:
+  entity_id: media_player.datasat_ap20_ap25
+data:
+  gpio: 3
+```
 
 ## Requirements
 
@@ -52,8 +92,9 @@ configured, the NetCmd or Setup password.
 
 ## Configuration
 
-The API has no command to list formats or macros, so enter their names yourself
-in the integration's *Configure* dialog, exactly as programmed on the unit:
+Formats and macros are read from the processor when its firmware supports
+listing them. If those lists stay empty, fill in the fallbacks in the
+integration's *Configure* dialog, exactly as programmed on the unit:
 
 ```
 Formats:  Digital Cinema, HDMI 1, HDMI 2, Non-Sync
@@ -65,26 +106,19 @@ power on/off, and the poll interval (default 10 s).
 
 ## About power control
 
-**The AP20/AP25 has no power or standby command.** TN-H413 rev D exposes system
-information, health, format, fader, mute, monitor level and macros — nothing
-that switches the unit on or off, and there is no standby state to read back.
-Wake-on-LAN is not supported by the processor either, so this integration does
-not pretend otherwise.
+`media_player.turn_on` and `turn_off` use whatever the unit and your setup make
+available, in this order:
 
-What it does instead:
+1. **`@POWER`**, if the probe found it. This is the processor's own standby
+   mode; leaving standby takes about 15 seconds before it is operational again.
+2. **An external power switch**, if you point the option at a smart plug or
+   relay that feeds the processor. Note the usual rack order: mute or power down
+   the amplifiers first, then the processor.
+3. **Power macros**, if a technician programmed them on the unit.
 
-- **Detects power state by reachability.** If the processor does not answer on
-  port 14500, the media player reports *off*, the *Connection* sensor goes off
-  and *Last seen* keeps the timestamp of the last successful poll.
-- **Delegates real power control.** Point the *External power switch* option at
-  a smart plug or relay that feeds the processor, and `media_player.turn_on` /
-  `turn_off` will switch that entity. Note the usual rack order: mute or power
-  down the amplifiers first, then the processor.
-- **Runs macros around it.** If a technician has programmed macros (for example
-  to drive the GPIO relays that control the amplifier rack), name them in the
-  power-on/power-off options.
-
-For everyday use, muting is the intended "off" for this class of device.
+All three can be combined. Without any of them the power buttons stay hidden and
+the media player reports *off* whenever the processor does not answer on port
+14500, with *Last seen* keeping the timestamp of the last successful poll.
 
 ## Logging
 

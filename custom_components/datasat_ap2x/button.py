@@ -17,10 +17,13 @@ async def async_setup_entry(
     entry: Ap2xConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Create one button per configured macro name."""
-    raw = entry.options.get(CONF_MACROS, "")
-    macros = [item.strip() for item in raw.split(",") if item.strip()]
-    async_add_entities(Ap2xMacroButton(entry.runtime_data, entry, macro) for macro in macros)
+    """Create one button per macro, read from the unit when it can list them."""
+    runtime_data = entry.runtime_data
+    macros = list(runtime_data.capabilities.macro_names)
+    if not macros:
+        raw = entry.options.get(CONF_MACROS, "")
+        macros = [item.strip() for item in raw.split(",") if item.strip()]
+    async_add_entities(Ap2xMacroButton(runtime_data, entry, macro) for macro in macros)
 
 
 class Ap2xMacroButton(Ap2xEntity, ButtonEntity):
