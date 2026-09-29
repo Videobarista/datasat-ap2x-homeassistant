@@ -174,9 +174,7 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         await self._call_power_switch(SERVICE_TURN_ON)
 
         if self._capabilities.power:
-            await self._async_send(
-                lambda: self.coordinator.client.set_power(True), "leave standby"
-            )
+            await self._async_send(lambda: self.coordinator.client.set_power(True), "leave standby")
 
         macro = self._entry.options.get(CONF_POWER_ON_MACRO)
         if macro:
