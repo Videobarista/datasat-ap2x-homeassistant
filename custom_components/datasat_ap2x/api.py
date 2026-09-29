@@ -161,7 +161,11 @@ class Ap2xClient:
             raise Ap2xConnectionError(f"Cannot connect to {self.host}:{self.port}: {err}") from err
 
         if self.password:
-            reply = await self._request_locked(f"AUTH {self.password}", _TIMEOUT)
+            try:
+                reply = await self._request_locked(f"AUTH {self.password}", _TIMEOUT, "AUTH ***")
+            except (OSError, TimeoutError, asyncio.IncompleteReadError) as err:
+                await self._close_locked()
+                raise Ap2xConnectionError(f"Authentication to {self.host} failed: {err}") from err
             if "SECERR" in reply.upper():
                 await self._close_locked()
                 raise Ap2xAuthError("Password rejected by the processor (SECERR)")
@@ -180,8 +184,12 @@ class Ap2xClient:
         except OSError as err:
             _LOGGER.debug("Error while closing connection to %s: %s", self.host, err)
 
-    async def _request_locked(self, cmd: str, timeout: float) -> str:
-        """Write one command and read its reply. Caller holds the lock."""
+    async def _request_locked(self, cmd: str, timeout: float, log_cmd: str | None = None) -> str:
+        """Write one command and read its reply. Caller holds the lock.
+
+        Callers that send credentials pass log_cmd with the secret left out, so
+        the password never reaches the log, not even at debug level.
+        """
         reader = self._reader
         writer = self._writer
         if reader is None or writer is None:
@@ -191,7 +199,7 @@ class Ap2xClient:
         await writer.drain()
         raw = await asyncio.wait_for(reader.readuntil(b"\r"), timeout)
         text = raw.decode("ascii", errors="replace").strip("\r\n\x00 ")
-        _LOGGER.debug("%s -> %s", cmd, text)
+        _LOGGER.debug("%s -> %s", log_cmd if log_cmd is not None else cmd, text)
         return text
 
     # ---- Documented commands ---------------------------------------------

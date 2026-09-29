@@ -29,7 +29,9 @@ API (TN-H413). A few properties of that protocol are worth knowing:
   isolated network segment; do not expose port 14500 to the internet.
 - **Password storage.** The optional NetCmd/Setup password is stored in the Home
   Assistant config entry, like any other integration credential. Anyone with
-  access to your Home Assistant configuration can read it.
+  access to your Home Assistant configuration can read it. It is never written
+  to the log: the `@AUTH` command is logged with the password left out, even at
+  debug level.
 - **No authorisation levels.** Once authenticated, the connection can issue every
   operator-level command for as long as it stays open.
 - **Local network only.** The integration makes no outbound connections other
