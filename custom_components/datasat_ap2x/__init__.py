@@ -6,7 +6,8 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 
 from .api import (
     Ap2xCapabilities,
@@ -16,6 +17,7 @@ from .api import (
     Ap2xSystemInfo,
     probe_capabilities,
 )
+from .const import DOMAIN
 from .coordinator import Ap2xCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,6 +68,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool
     except Ap2xError as err:
         _LOGGER.warning("Could not read identification from %s: %s", entry.data[CONF_HOST], err)
 
+    _async_remove_legacy_entities(hass, entry)
+
     coordinator = Ap2xCoordinator(hass, entry, client, capabilities)
     await coordinator.async_config_entry_first_refresh()
 
@@ -73,6 +77,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
+
+
+@callback
+def _async_remove_legacy_entities(hass: HomeAssistant, entry: Ap2xConfigEntry) -> None:
+    """Remove entities that older versions created and that no longer exist.
+
+    Up to version 1.3 there was a single combined power-supply sensor. It was
+    replaced by one sensor per board, so the old entity would linger in the
+    registry as permanently unavailable.
+    """
+    registry = er.async_get(hass)
+    legacy_unique_id = f"{entry.unique_id or entry.entry_id}_psu_fault"
+    entity_id = registry.async_get_entity_id(Platform.BINARY_SENSOR, DOMAIN, legacy_unique_id)
+    if entity_id:
+        _LOGGER.debug("Removing entity %s, replaced by the per-board supply sensors", entity_id)
+        registry.async_remove(entity_id)
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> None:

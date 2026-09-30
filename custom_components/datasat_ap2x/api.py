@@ -383,9 +383,13 @@ async def probe_capabilities(client: Ap2xClient) -> Ap2xCapabilities:
 
 
 def _is_error_reply(reply: str) -> bool:
-    """Return True when a reply means the command was refused or unknown."""
-    text = reply.strip().upper()
-    return not text or text.startswith(("ERR", "SECERR", "?"))
+    """Return True when a reply means the command was refused or unknown.
+
+    An AP20 answers an unknown command with "BadCommand", which must not be
+    mistaken for data by the commands whose reply carries no keyword of its own.
+    """
+    text = reply.strip().upper().replace(" ", "")
+    return not text or text.startswith(("ERR", "SECERR", "BADCOMMAND", "NAK", "?"))
 
 
 def _text_arg(reply: str) -> str | None:

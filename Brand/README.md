@@ -10,3 +10,7 @@ and are not redistributed here.
 If you have permission to use the logo, drop `icon.png` (256x256) and
 `logo.png` here and open a pull request — or submit them directly to the
 brands repository under the domain `datasat_ap2x`.
+
+A self-drawn, generic cinema audio processor icon ships in
+`custom_components/datasat_ap2x/brand/` so the integration is recognisable in
+Home Assistant. It deliberately carries no manufacturer marks.
