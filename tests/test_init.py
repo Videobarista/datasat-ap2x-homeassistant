@@ -57,7 +57,9 @@ async def test_setup_and_unload(
     await _setup(hass, mock_config_entry)
     assert mock_config_entry.state is ConfigEntryState.LOADED
 
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, MAC)})
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, MAC), mock_config_entry.entry_id
+    )
     assert device is not None
     assert device.sw_version == "3.1.2"
 
