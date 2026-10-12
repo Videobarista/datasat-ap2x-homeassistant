@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import voluptuous as vol
-
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
@@ -12,19 +10,15 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import Ap2xConfigEntry, Ap2xRuntimeData
-from .api import MAX_GPIO, MIN_GPIO
 from .const import (
-    ATTR_GPIO,
     CONF_FORMATS,
     CONF_POWER_OFF_MACRO,
     CONF_POWER_ON_MACRO,
     CONF_POWER_SWITCH,
     FADER_MAX,
-    SERVICE_PULSE,
 )
 from .entity import Ap2xEntity
 
@@ -34,15 +28,8 @@ async def async_setup_entry(
     entry: Ap2xConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the media player and register the GPIO pulse service."""
+    """Set up the media player. The pulse action is registered in async_setup."""
     async_add_entities([Ap2xMediaPlayer(entry.runtime_data, entry)])
-
-    platform = entity_platform.async_get_current_platform()
-    platform.async_register_entity_service(
-        SERVICE_PULSE,
-        {vol.Required(ATTR_GPIO): vol.All(vol.Coerce(int), vol.Range(min=MIN_GPIO, max=MAX_GPIO))},
-        "async_pulse",
-    )
 
 
 class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):

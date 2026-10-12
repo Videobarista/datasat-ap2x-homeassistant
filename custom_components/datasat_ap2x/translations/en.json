@@ -8,12 +8,18 @@
           "host": "IP address",
           "port": "Port",
           "password": "NetCmd or Setup password (leave empty if none)"
+        },
+        "data_description": {
+          "host": "IP address or host name of the processor. A fixed address (DHCP reservation) is recommended.",
+          "port": "TCP control port. 14500 unless it was changed on the unit.",
+          "password": "Only needed when a NetCmd or Setup password is set under System > Access Control on the unit."
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot reach the processor. Check the IP address, the port and whether the unit is switched on.",
-      "invalid_auth": "The processor rejected the password (SECERR)."
+      "invalid_auth": "The processor rejected the password (SECERR).",
+      "unknown": "Unexpected error. Check the Home Assistant log for details."
     },
     "abort": {
       "already_configured": "This processor is already configured."
@@ -33,7 +39,12 @@
           "scan_interval": "Poll interval"
         },
         "data_description": {
-          "power_switch": "Only needed if the processor does not accept the POWER command. Point this at the switch that feeds it."
+          "formats": "Only used when the unit cannot list its formats itself.",
+          "macros": "Each macro gets its own button. Only used when the unit cannot list its macros itself.",
+          "power_switch": "Only needed if the processor does not accept the POWER command. Point this at the switch that feeds it.",
+          "power_on_macro": "Runs after the processor is switched on, for example to set a default format and fader level.",
+          "power_off_macro": "Runs before the processor is switched off, for example to mute the outputs first.",
+          "scan_interval": "How often the state is read. Temperatures and voltages are read about once a minute regardless."
         }
       }
     }

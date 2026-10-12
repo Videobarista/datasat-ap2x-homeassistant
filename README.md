@@ -4,8 +4,10 @@
 [![hassfest](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hassfest.yml)
 [![HACS](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/hacs.yml)
 [![CodeQL](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml)
+[![Tests](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/Videobarista/datasat-ap2x-homeassistant?display_name=tag)](https://github.com/Videobarista/datasat-ap2x-homeassistant/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Quality scale: Bronze (aligned)](https://img.shields.io/badge/quality%20scale-bronze%20(aligned)-cd7f32.svg)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 
 [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Videobarista&repository=datasat-ap2x-homeassistant&category=integration)
 
@@ -62,9 +64,17 @@ know a command simply does not answer — the feature then stays hidden and the
 manual fallbacks in the options are used instead. What was detected is visible
 in the integration's diagnostics download.
 
-## Services
+## Actions
 
-`datasat_ap2x.pulse` fires a 250 ms pulse on a GPIO output:
+### `datasat_ap2x.pulse`
+
+Fires a 250 ms pulse on one of the processor's GPIO outputs, for example to
+trigger masking, lights or an amplifier relay that is wired to the unit.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `target` | yes | The processor's media player entity. |
+| `gpio` | yes | GPIO output number, 1 to 21. |
 
 ```yaml
 action: datasat_ap2x.pulse
@@ -74,9 +84,15 @@ data:
   gpio: 3
 ```
 
+The action only has an effect on units whose firmware accepts the `@PULSE`
+command. A pulse sent while the processor is switched off is dropped.
+
+All other control uses the standard media player, number, switch and button
+actions of Home Assistant.
+
 ## Requirements
 
-Home Assistant 2025.2 or newer.
+Home Assistant 2025.10 or newer.
 
 ## Installation
 
@@ -135,6 +151,29 @@ logger:
   logs:
     custom_components.datasat_ap2x: debug
 ```
+
+## Removal
+
+1. Go to **Settings → Devices & services** and open **Datasat AP20/AP25**.
+2. Open the menu (three dots) next to the processor and choose **Delete**.
+3. To remove the files as well: in HACS, open **Datasat AP20/AP25** and choose
+   **Remove**, or delete `custom_components/datasat_ap2x` for a manual
+   installation. Restart Home Assistant afterwards.
+
+Nothing is changed on the processor itself. If you set a NetCmd password only for
+Home Assistant, you can clear it under **System > Access Control** on the unit.
+
+## Quality scale
+
+This integration is aligned with the **Bronze** tier of the
+[Home Assistant integration quality scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/).
+Home Assistant only grades integrations that ship with Home Assistant itself, so this is a
+self-assessment, not an official rating. The status per rule is recorded in
+[`quality_scale.yaml`](custom_components/datasat_ap2x/quality_scale.yaml).
+
+One choice is deliberate: a processor that does not answer during setup is not treated as
+a setup failure, because these units are switched off at the rack every day. The entry
+loads and the entities report the processor as off. A rejected password does fail setup.
 
 ## License
 

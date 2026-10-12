@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import logging
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
+from homeassistant.exceptions import ConfigEntryError
+from homeassistant.helpers import config_validation as cv, entity_registry as er, service
+from homeassistant.helpers.typing import ConfigType
 
 from .api import (
+    MAX_GPIO,
+    MIN_GPIO,
+    Ap2xAuthError,
     Ap2xCapabilities,
     Ap2xClient,
     Ap2xConnectionError,
@@ -17,10 +24,12 @@ from .api import (
     Ap2xSystemInfo,
     probe_capabilities,
 )
-from .const import DOMAIN
+from .const import ATTR_GPIO, DOMAIN, SERVICE_PULSE
 from .coordinator import Ap2xCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -49,8 +58,28 @@ class Ap2xRuntimeData:
         self.capabilities = capabilities
 
 
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's actions, independent of any config entry."""
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        SERVICE_PULSE,
+        entity_domain=Platform.MEDIA_PLAYER,
+        schema={
+            vol.Required(ATTR_GPIO): vol.All(vol.Coerce(int), vol.Range(min=MIN_GPIO, max=MAX_GPIO))
+        },
+        func="async_pulse",
+    )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool:
-    """Set up one Datasat processor from a config entry."""
+    """Set up one Datasat processor from a config entry.
+
+    A processor that does not answer is not a setup failure: these units are
+    switched off at the rack every day, so the entities simply report it as off.
+    A processor that answers but rejects the password is a configuration error.
+    """
     client = Ap2xClient(
         entry.data[CONF_HOST],
         entry.data[CONF_PORT],
@@ -62,8 +91,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool
     try:
         system = await client.get_system_info()
         capabilities = await probe_capabilities(client)
+    except Ap2xAuthError as err:
+        await client.disconnect()
+        raise ConfigEntryError(
+            f"The processor at {entry.data[CONF_HOST]} rejected the password"
+        ) from err
     except Ap2xConnectionError as err:
-        # The unit is simply switched off; both reads are optional at setup.
         _LOGGER.debug("No identification read from %s during setup: %s", entry.data[CONF_HOST], err)
     except Ap2xError as err:
         _LOGGER.warning("Could not read identification from %s: %s", entry.data[CONF_HOST], err)

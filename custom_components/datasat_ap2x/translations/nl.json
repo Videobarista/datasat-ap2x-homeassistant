@@ -8,12 +8,18 @@
           "host": "IP-adres",
           "port": "Poort",
           "password": "NetCmd- of Setup-wachtwoord (leeg laten als er geen is)"
+        },
+        "data_description": {
+          "host": "IP-adres of hostnaam van de processor. Een vast adres (DHCP-reservering) wordt aangeraden.",
+          "port": "TCP-besturingspoort. 14500, tenzij die op het apparaat is gewijzigd.",
+          "password": "Alleen nodig als er onder System > Access Control op het apparaat een NetCmd- of Setup-wachtwoord is ingesteld."
         }
       }
     },
     "error": {
       "cannot_connect": "Kan de processor niet bereiken. Controleer het IP-adres, de poort en of het apparaat aan staat.",
-      "invalid_auth": "De processor weigerde het wachtwoord (SECERR)."
+      "invalid_auth": "De processor weigerde het wachtwoord (SECERR).",
+      "unknown": "Onverwachte fout. Kijk in het Home Assistant-logboek voor details."
     },
     "abort": {
       "already_configured": "Deze processor is al geconfigureerd."
@@ -33,7 +39,12 @@
           "scan_interval": "Poll-interval"
         },
         "data_description": {
-          "power_switch": "Alleen nodig als de processor het POWER-commando niet accepteert. Wijs hier de schakelaar aan die hem voedt."
+          "formats": "Wordt alleen gebruikt als het apparaat zijn formats niet zelf kan opsommen.",
+          "macros": "Elke macro krijgt een eigen knop. Wordt alleen gebruikt als het apparaat zijn macro's niet zelf kan opsommen.",
+          "power_switch": "Alleen nodig als de processor het POWER-commando niet accepteert. Wijs hier de schakelaar aan die hem voedt.",
+          "power_on_macro": "Wordt uitgevoerd nadat de processor is ingeschakeld, bijvoorbeeld om een standaard-format en faderstand te zetten.",
+          "power_off_macro": "Wordt uitgevoerd voordat de processor wordt uitgeschakeld, bijvoorbeeld om eerst de uitgangen te dempen.",
+          "scan_interval": "Hoe vaak de status wordt gelezen. Temperaturen en spanningen worden hoe dan ook ongeveer eens per minuut gelezen."
         }
       }
     }

@@ -69,6 +69,9 @@ class Ap2xConfigFlow(ConfigFlow, domain=DOMAIN):
             except Ap2xConnectionError as err:
                 _LOGGER.debug("Connection test to %s:%s failed: %s", host, port, err)
                 errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected error while testing %s:%s", host, port)
+                errors["base"] = "unknown"
             finally:
                 await client.disconnect()
 

@@ -1,0 +1,46 @@
+# Status against the Home Assistant integration quality scale.
+# https://developers.home-assistant.io/docs/core/integration-quality-scale/
+#
+# Custom integrations are not graded by Home Assistant; this file records how the
+# integration aligns with the Bronze tier. Higher tiers are not claimed.
+rules:
+  # Bronze
+  action-setup:
+    status: done
+    comment: The pulse action is registered in async_setup.
+  appropriate-polling:
+    status: done
+    comment: >-
+      State is polled every 10 seconds by default (configurable from 2 to 300);
+      temperatures and supply voltages about once a minute.
+  brands: done
+  common-modules: done
+  config-flow-test-coverage: done
+  config-flow: done
+  dependency-transparency:
+    status: done
+    comment: No external requirements; the TCP client is part of the integration.
+  docs-actions: done
+  docs-conditions:
+    status: exempt
+    comment: The integration provides no conditions.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  docs-triggers:
+    status: exempt
+    comment: The integration provides no triggers.
+  entity-event-setup:
+    status: exempt
+    comment: Entities do not subscribe to events; they read coordinator data.
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup:
+    status: done
+    comment: >-
+      A rejected password raises ConfigEntryError. An unreachable processor is
+      deliberately not a setup failure: these units are switched off at the rack
+      daily, so the entry loads and the entities report the processor as off.
+  unique-config-entry: done
