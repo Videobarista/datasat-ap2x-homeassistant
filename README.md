@@ -84,6 +84,13 @@ data:
   gpio: 3
 ```
 
+GPIO outputs can switch real hardware, so the action is guarded twice:
+
+- It is **off by default**. Turn on *Allow the GPIO pulse action* in the
+  integration's *Configure* dialog for each processor that should accept it.
+- Only **administrators and automations** may call it. Users without admin
+  rights get an "Unauthorized" error, also from a dashboard button.
+
 The action only has an effect on units whose firmware accepts the `@PULSE`
 command. A pulse sent while the processor is switched off is dropped.
 
@@ -118,7 +125,9 @@ Macros:   Showtime, Interval, Clean-up
 ```
 
 Also configurable there: an external power switch entity, macros to run around
-power on/off, and the poll interval (default 10 s).
+power on/off, the GPIO pulse action (off by default) and the poll interval
+(default 10 s). Names must be printable ASCII without `@`, up to 64 characters;
+the dialog refuses anything else.
 
 ## About power control
 
@@ -140,9 +149,12 @@ the media player reports *off* whenever the processor does not answer on port
 
 A processor that is switched off is normal operation, not a fault: it is logged
 at debug level and the entities simply report *off*. Commands sent while the
-unit is unreachable are dropped and logged at debug level too. Protocol errors
-from a unit that *is* answering — a macro that does not exist, an unexpected
-response — are logged as warnings or errors.
+unit is unreachable are dropped and logged at debug level too. Problems with a
+unit that *is* answering — a macro that does not exist, an unexpected response,
+a refused password — are logged as a warning or error once, not on every poll.
+
+The debug log shows every command and reply, except the password and the
+replies that identify the unit (MAC address, serial number, site names).
 
 To follow what goes over the wire:
 
@@ -151,6 +163,52 @@ logger:
   logs:
     custom_components.datasat_ap2x: debug
 ```
+
+## Security
+
+The integration treats the processor's control port as untrusted in both
+directions:
+
+- **Nothing unsafe is sent.** Format names, macro names and the password are
+  checked before they reach the unit, and a format can only be selected from the
+  unit's own list, so no name can carry a second command.
+- **Nothing unexpected is believed.** Replies are limited in length and must
+  belong to the command that was sent. A reply that does not fit closes the
+  connection, so the next poll starts clean instead of reading shifted values.
+  Out-of-range and non-numeric values are treated as unknown.
+- **Volume steps are taken from the fader as it is now**, read just before the
+  step, so a level changed on the front panel never makes the volume jump.
+- **Least privilege.** Use the NetCmd password: the integration only needs
+  operator commands. If Home Assistant logs in with the Setup password, a repair
+  issue says so.
+- **Nothing is opened.** The integration listens on no port and only connects
+  out to the processor.
+
+### Network hardening
+
+The protocol itself is unencrypted and the integration cannot change that: the
+password and every command travel in plain text. Protect the processor on the
+network:
+
+| From | To the processor | |
+| --- | --- | --- |
+| Home Assistant | TCP 14500 (control) | allow |
+| Other controllers (e.g. Bitfocus Companion) | TCP 14500 | allow |
+| One management computer | VNC (TCP 5900 by default) | allow |
+| Everything else | anything | block |
+| The processor | the internet and other networks | block |
+
+- Put the AV equipment in its own VLAN and give the processor a fixed address
+  (DHCP reservation).
+- The processor runs a **VNC server** that gives full control of the touch
+  screen; the setup menus are protected only by the Setup password.
+- Network firmware updates fetch from Datasat's servers. Open internet access
+  only for an update, or update from a USB stick instead.
+- Set both a NetCmd and a Setup password on the unit.
+- To see which ports the unit really opens, scan it once from a computer on the
+  same network, for example `nmap -Pn -p- <processor-ip>`.
+
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
 
 ## Removal
 

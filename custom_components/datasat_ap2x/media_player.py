@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
@@ -10,17 +12,24 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import Ap2xConfigEntry, Ap2xRuntimeData
+from .api import parse_name_list
 from .const import (
+    CONF_ENABLE_PULSE,
     CONF_FORMATS,
     CONF_POWER_OFF_MACRO,
     CONF_POWER_ON_MACRO,
     CONF_POWER_SWITCH,
+    DOMAIN,
     FADER_MAX,
+    POWER_SWITCH_DOMAINS,
 )
 from .entity import Ap2xEntity
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -47,8 +56,7 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         """Return the format names, read from the unit when it supports listing them."""
         if self._capabilities.format_names:
             return self._capabilities.format_names
-        raw = self._entry.options.get(CONF_FORMATS, "")
-        return [item.strip() for item in raw.split(",") if item.strip()]
+        return parse_name_list(self._entry.options.get(CONF_FORMATS, ""))
 
     @property
     def _power_switch(self) -> str | None:
@@ -130,13 +138,25 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
 
     async def async_volume_up(self) -> None:
         """Raise the master fader by one tenth."""
-        level = (self.coordinator.data.fader or 0) + 1
-        await self._async_send(lambda: self.coordinator.client.set_fader(level), "raise the fader")
+        await self._async_send(lambda: self._async_step_fader(1), "raise the fader")
 
     async def async_volume_down(self) -> None:
         """Lower the master fader by one tenth."""
-        level = (self.coordinator.data.fader or 0) - 1
-        await self._async_send(lambda: self.coordinator.client.set_fader(level), "lower the fader")
+        await self._async_send(lambda: self._async_step_fader(-1), "lower the fader")
+
+    async def _async_step_fader(self, delta: int) -> None:
+        """Step the fader from its current position, read fresh from the unit.
+
+        The polled value can be out of date: the front panel or another controller
+        may have moved the fader since the last poll, and stepping from a stale
+        value would make the level jump.
+        """
+        client = self.coordinator.client
+        current = await client.get_fader()
+        if current is None:
+            _LOGGER.debug("Fader position of %s unknown, not stepping", client.host)
+            return
+        await client.set_fader(current + delta)
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute or unmute the main outputs."""
@@ -145,13 +165,25 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         )
 
     async def async_select_source(self, source: str) -> None:
-        """Select a format by name."""
+        """Select a format by name; only names the unit or the options list are accepted."""
+        if source not in self._formats:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_format",
+                translation_placeholders={"format": source[:80]},
+            )
         await self._async_send(
             lambda: self.coordinator.client.set_format(source), f"select format '{source}'"
         )
 
     async def async_pulse(self, gpio: int) -> None:
-        """Fire a 250 ms pulse on a GPIO output."""
+        """Fire a 250 ms pulse on a GPIO output, if switched on in the options."""
+        if not self._entry.options.get(CONF_ENABLE_PULSE, False):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="pulse_disabled",
+                translation_placeholders={"title": self._entry.title},
+            )
         await self._async_send(
             lambda: self.coordinator.client.pulse_gpio(gpio), f"pulse GPIO {gpio}"
         )
@@ -193,6 +225,11 @@ class Ap2xMediaPlayer(Ap2xEntity, MediaPlayerEntity):
         if not entity_id:
             return
         domain = entity_id.split(".", 1)[0]
+        if domain not in POWER_SWITCH_DOMAINS:
+            _LOGGER.warning(
+                "Ignoring power switch %s: not a switch, input_boolean or light", entity_id
+            )
+            return
         await self.hass.services.async_call(
             domain, service, {ATTR_ENTITY_ID: entity_id}, blocking=True
         )

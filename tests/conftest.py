@@ -39,6 +39,9 @@ def make_system_info(mac: str | None = MAC, serial: str | None = SERIAL) -> Ap2x
         version_date="2024-05-01",
         mac=mac,
         serial=serial,
+        circuit="Circuit-1",
+        theater="Theater-3",
+        screen="Screen-3",
         boards=["H331", "H332", "H335", "H336"],
     )
 
@@ -70,6 +73,7 @@ def make_client() -> MagicMock:
     """Return a mocked Ap2xClient that behaves like a healthy AP20 in operation."""
     client = MagicMock()
     client.host = HOST
+    client.auth_level = None
     client.connect = AsyncMock()
     client.disconnect = AsyncMock()
     client.get_system_info = AsyncMock(return_value=make_system_info())

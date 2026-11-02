@@ -7,8 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.datasat_ap2x.api import Ap2xAuthError, Ap2xConnectionError
+from custom_components.datasat_ap2x.api import Ap2xAuthError, Ap2xConnectionError, Ap2xProtocolError
 from custom_components.datasat_ap2x.const import (
+    CONF_ENABLE_PULSE,
     CONF_FORMATS,
     CONF_MAC,
     CONF_MACROS,
@@ -58,6 +59,7 @@ async def test_user_flow(hass: HomeAssistant, mock_client: MagicMock) -> None:
     [
         (Ap2xAuthError("SECERR"), "invalid_auth"),
         (Ap2xConnectionError("refused"), "cannot_connect"),
+        (Ap2xProtocolError("not a Datasat"), "not_a_processor"),
         (RuntimeError("boom"), "unknown"),
     ],
 )
@@ -118,8 +120,26 @@ async def test_user_flow_already_configured(
     assert result["reason"] == "already_configured"
 
 
+async def test_user_flow_unsafe_password(hass: HomeAssistant, mock_client: MagicMock) -> None:
+    """A password with control characters is refused before anything is sent."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**USER_INPUT, CONF_PASSWORD: "pw\r@POWER 0"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_PASSWORD: "invalid_password"}
+    mock_client.connect.assert_not_awaited()
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**USER_INPUT, CONF_PASSWORD: "p@ssword"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PASSWORD] == "p@ssword"
+
+
 async def test_options_flow(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:
-    """Options are stored, and fields left empty are not."""
+    """Options are stored, fields left empty are not, and pulses stay off by default."""
     mock_config_entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
@@ -139,5 +159,34 @@ async def test_options_flow(hass: HomeAssistant, mock_config_entry: MockConfigEn
     assert mock_config_entry.options == {
         CONF_FORMATS: "DCP 5.1 discrete, Nonsync",
         CONF_POWER_ON_MACRO: "FORMAT_1",
+        CONF_ENABLE_PULSE: False,
         CONF_SCAN_INTERVAL: 20,
     }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        (CONF_FORMATS, "Nonsync, HDMI 1\r@POWER 0"),
+        (CONF_MACROS, "FORMAT_1, bad@macro"),
+        (CONF_POWER_ON_MACRO, "Kanaal \u00e9"),
+    ],
+)
+async def test_options_flow_unsafe_names(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, field: str, value: str
+) -> None:
+    """Names the processor cannot take are refused per field, and nothing is stored."""
+    mock_config_entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {field: value})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {field: "invalid_names"}
+    assert mock_config_entry.options == {}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_ENABLE_PULSE: True}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options[CONF_ENABLE_PULSE] is True

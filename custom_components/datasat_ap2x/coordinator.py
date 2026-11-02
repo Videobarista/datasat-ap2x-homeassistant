@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 
 from .api import (
     VOLTS_BOARDS,
+    Ap2xAuthError,
     Ap2xCapabilities,
     Ap2xClient,
     Ap2xConnectionError,
@@ -37,7 +38,7 @@ class Ap2xData:
     format: str | None = None
     monitor_level: int | None = None
     monitor_muted: bool | None = None
-    temperatures: list[float] = field(default_factory=list)
+    temperatures: list[float | None] = field(default_factory=list)
     volts: dict[str, Ap2xVolts] = field(default_factory=dict)
 
 
@@ -46,7 +47,8 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
 
     Operational values are read every cycle; temperatures and supply voltages
     change slowly and are read about once a minute. An unreachable unit is
-    normal operation and is logged at debug level only.
+    normal operation and is logged at debug level only. A unit that answers
+    nonsense, or refuses the password, is logged once until it recovers.
     """
 
     config_entry: ConfigEntry
@@ -70,6 +72,7 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
         self.client = client
         self.capabilities = capabilities
         self._was_reachable: bool | None = None
+        self._problem: str | None = None
         self._health_due = 0.0
 
     async def _async_update_data(self) -> Ap2xData:
@@ -101,17 +104,32 @@ class Ap2xCoordinator(DataUpdateCoordinator[Ap2xData]):
             self._was_reachable = False
             return data
         except Ap2xError as err:
-            # The unit answered but the exchange went wrong: that is a real fault.
-            _LOGGER.error("Protocol error while polling %s: %s", self.client.host, err)
+            # The unit answered, but the exchange went wrong: a real fault, logged once.
+            self._report_problem(err)
             self._was_reachable = False
             return data
 
-        if self._was_reachable is False:
+        if self._problem is not None:
+            _LOGGER.info("Processor at %s is answering normally again", self.client.host)
+            self._problem = None
+        elif self._was_reachable is False:
             _LOGGER.debug("Processor at %s is responding again", self.client.host)
         self._was_reachable = True
         data.reachable = True
         data.last_seen = dt_util.utcnow()
         return data
+
+    def _report_problem(self, err: Ap2xError) -> None:
+        """Log a fault once; repeats of the same fault go to the debug log."""
+        problem = f"{type(err).__name__}: {err}"
+        if problem == self._problem:
+            _LOGGER.debug("Still failing to poll %s: %s", self.client.host, err)
+            return
+        self._problem = problem
+        if isinstance(err, Ap2xAuthError):
+            _LOGGER.error("Processor at %s refuses the password: %s", self.client.host, err)
+        else:
+            _LOGGER.warning("Unexpected answer from the processor at %s: %s", self.client.host, err)
 
     async def _async_update_health(self, data: Ap2xData) -> None:
         """Read temperatures and supply voltages at a slower cadence."""

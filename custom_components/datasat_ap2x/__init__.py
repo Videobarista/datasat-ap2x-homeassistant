@@ -10,10 +10,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError
-from homeassistant.helpers import config_validation as cv, entity_registry as er, service
+from homeassistant.helpers import (
+    config_validation as cv,
+    entity_registry as er,
+    issue_registry as ir,
+    service,
+)
 from homeassistant.helpers.typing import ConfigType
 
 from .api import (
+    AUTH_LEVEL_SETUP,
     MAX_GPIO,
     MIN_GPIO,
     Ap2xAuthError,
@@ -24,7 +30,7 @@ from .api import (
     Ap2xSystemInfo,
     probe_capabilities,
 )
-from .const import ATTR_GPIO, DOMAIN, SERVICE_PULSE
+from .const import ATTR_GPIO, DOMAIN, ISSUE_SETUP_PASSWORD, SERVICE_PULSE
 from .coordinator import Ap2xCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,7 +65,12 @@ class Ap2xRuntimeData:
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the integration's actions, independent of any config entry."""
+    """Register the integration's actions, independent of any config entry.
+
+    The pulse action drives GPIO outputs that can switch real hardware, so only
+    administrators (and automations) may call it. It also has to be switched on
+    per processor in the options.
+    """
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,
@@ -69,6 +80,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             vol.Required(ATTR_GPIO): vol.All(vol.Coerce(int), vol.Range(min=MIN_GPIO, max=MAX_GPIO))
         },
         func="async_pulse",
+        admin_only=True,
     )
     return True
 
@@ -80,27 +92,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool
     switched off at the rack every day, so the entities simply report it as off.
     A processor that answers but rejects the password is a configuration error.
     """
-    client = Ap2xClient(
-        entry.data[CONF_HOST],
-        entry.data[CONF_PORT],
-        entry.data.get(CONF_PASSWORD) or None,
-    )
+    host = entry.data[CONF_HOST]
+    client = Ap2xClient(host, entry.data[CONF_PORT], entry.data.get(CONF_PASSWORD) or None)
 
     system = Ap2xSystemInfo()
     capabilities = Ap2xCapabilities()
+    reachable = True
     try:
         system = await client.get_system_info()
-        capabilities = await probe_capabilities(client)
     except Ap2xAuthError as err:
         await client.disconnect()
-        raise ConfigEntryError(
-            f"The processor at {entry.data[CONF_HOST]} rejected the password"
-        ) from err
+        raise ConfigEntryError(f"The processor at {host} rejected the password") from err
     except Ap2xConnectionError as err:
-        _LOGGER.debug("No identification read from %s during setup: %s", entry.data[CONF_HOST], err)
+        reachable = False
+        _LOGGER.debug("No identification read from %s during setup: %s", host, err)
     except Ap2xError as err:
-        _LOGGER.warning("Could not read identification from %s: %s", entry.data[CONF_HOST], err)
+        _LOGGER.warning("Could not read identification from %s: %s", host, err)
 
+    if reachable:
+        capabilities = await probe_capabilities(client)
+
+    _async_check_auth_level(hass, entry, client)
     _async_remove_legacy_entities(hass, entry)
 
     coordinator = Ap2xCoordinator(hass, entry, client, capabilities)
@@ -110,6 +122,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> bool
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
+
+
+@callback
+def _async_check_auth_level(
+    hass: HomeAssistant, entry: Ap2xConfigEntry, client: Ap2xClient
+) -> None:
+    """Raise a repair issue when Home Assistant logs in with the Setup password.
+
+    The integration only needs operator commands, for which the NetCmd password
+    is enough. With the Setup password, anything that can reach Home Assistant's
+    connection also has setup-level access to the processor.
+    """
+    issue_id = f"{ISSUE_SETUP_PASSWORD}_{entry.entry_id}"
+    if client.auth_level == AUTH_LEVEL_SETUP:
+        _LOGGER.debug("Logged in to %s with the Setup password", client.host)
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_SETUP_PASSWORD,
+            translation_placeholders={"title": entry.title},
+        )
+    elif client.auth_level is not None:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
 
 
 @callback
@@ -139,3 +177,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> boo
     if unload_ok:
         await entry.runtime_data.coordinator.client.disconnect()
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: Ap2xConfigEntry) -> None:
+    """Clean up the repair issue of a processor that is removed."""
+    ir.async_delete_issue(hass, DOMAIN, f"{ISSUE_SETUP_PASSWORD}_{entry.entry_id}")

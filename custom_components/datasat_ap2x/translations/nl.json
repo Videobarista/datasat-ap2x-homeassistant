@@ -7,19 +7,21 @@
         "data": {
           "host": "IP-adres",
           "port": "Poort",
-          "password": "NetCmd- of Setup-wachtwoord (leeg laten als er geen is)"
+          "password": "NetCmd-wachtwoord (leeg laten als er geen is)"
         },
         "data_description": {
           "host": "IP-adres of hostnaam van de processor. Een vast adres (DHCP-reservering) wordt aangeraden.",
           "port": "TCP-besturingspoort. 14500, tenzij die op het apparaat is gewijzigd.",
-          "password": "Alleen nodig als er onder System > Access Control op het apparaat een NetCmd- of Setup-wachtwoord is ingesteld."
+          "password": "Alleen nodig als er onder System > Access Control op het apparaat een wachtwoord is ingesteld. Gebruik het NetCmd-wachtwoord: Home Assistant heeft alleen operatorcommando's nodig, en het Setup-wachtwoord zou het instelrechten geven."
         }
       }
     },
     "error": {
       "cannot_connect": "Kan de processor niet bereiken. Controleer het IP-adres, de poort en of het apparaat aan staat.",
       "invalid_auth": "De processor weigerde het wachtwoord (SECERR).",
-      "unknown": "Onverwachte fout. Kijk in het Home Assistant-logboek voor details."
+      "unknown": "Onverwachte fout. Kijk in het Home Assistant-logboek voor details.",
+      "invalid_password": "Het wachtwoord mag alleen afdrukbare ASCII-tekens bevatten (maximaal 64).",
+      "not_a_processor": "Er antwoordt iets op dit adres, maar niet zoals een Datasat-processor. Controleer het IP-adres en de poort."
     },
     "abort": {
       "already_configured": "Deze processor is al geconfigureerd."
@@ -36,6 +38,7 @@
           "power_switch": "Externe voedingsschakelaar (slimme stekker of relais)",
           "power_on_macro": "Macro die na inschakelen wordt uitgevoerd",
           "power_off_macro": "Macro die vóór uitschakelen wordt uitgevoerd",
+          "enable_pulse": "GPIO-pulsactie toestaan",
           "scan_interval": "Poll-interval"
         },
         "data_description": {
@@ -44,21 +47,42 @@
           "power_switch": "Alleen nodig als de processor het POWER-commando niet accepteert. Wijs hier de schakelaar aan die hem voedt.",
           "power_on_macro": "Wordt uitgevoerd nadat de processor is ingeschakeld, bijvoorbeeld om een standaard-format en faderstand te zetten.",
           "power_off_macro": "Wordt uitgevoerd voordat de processor wordt uitgeschakeld, bijvoorbeeld om eerst de uitgangen te dempen.",
+          "enable_pulse": "Laat beheerders en automatiseringen pulsen sturen op de GPIO-uitgangen, die hardware kunnen schakelen zoals doek, licht of eindtrap-relais. Laat uit als je het niet gebruikt.",
           "scan_interval": "Hoe vaak de status wordt gelezen. Temperaturen en spanningen worden hoe dan ook ongeveer eens per minuut gelezen."
         }
       }
+    },
+    "error": {
+      "invalid_names": "Namen mogen alleen afdrukbare ASCII-tekens bevatten, zonder '@' (maximaal 64 per naam)."
     }
   },
   "services": {
     "pulse": {
       "name": "Puls op een GPIO-uitgang",
-      "description": "Geeft een puls van 250 ms op een van de GPIO-uitgangen. Werkt alleen op units waarvan de firmware het PULSE-commando accepteert.",
+      "description": "Stuurt een puls van 250 ms op een van de GPIO-uitgangen. Alleen voor beheerders en automatiseringen, en alleen als dit in de opties van de integratie is toegestaan. Werkt op apparaten waarvan de firmware het PULSE-commando accepteert.",
       "fields": {
         "gpio": {
           "name": "GPIO-nummer",
           "description": "De GPIO-uitgang die een puls krijgt, 1 tot en met 21."
         }
       }
+    }
+  },
+  "issues": {
+    "setup_password": {
+      "title": "{title} gebruikt het Setup-wachtwoord",
+      "description": "Home Assistant logt bij {title} in met het Setup-wachtwoord, wat instelrechten op de processor geeft. De integratie heeft alleen operatorcommando's nodig. Stel onder System > Access Control op het apparaat een NetCmd-wachtwoord in, verwijder deze processor in Home Assistant en voeg hem opnieuw toe met dat wachtwoord."
+    }
+  },
+  "exceptions": {
+    "unknown_format": {
+      "message": "'{format}' is geen format van deze processor."
+    },
+    "pulse_disabled": {
+      "message": "GPIO-pulsen staan uit voor {title}. Zet 'GPIO-pulsactie toestaan' aan in de opties van de integratie."
+    },
+    "invalid_name": {
+      "message": "{error}"
     }
   }
 }

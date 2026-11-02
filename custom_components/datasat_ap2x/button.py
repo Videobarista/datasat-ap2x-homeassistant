@@ -8,6 +8,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import slugify
 
 from . import Ap2xConfigEntry, Ap2xRuntimeData
+from .api import parse_name_list
 from .const import CONF_MACROS
 from .entity import Ap2xEntity
 
@@ -17,13 +18,24 @@ async def async_setup_entry(
     entry: Ap2xConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Create one button per macro, read from the unit when it can list them."""
+    """Create one button per macro, read from the unit when it can list them.
+
+    Two names that would get the same entity id (such as "HDMI 1" and "HDMI-1")
+    get one button only, so no entity silently goes missing.
+    """
     runtime_data = entry.runtime_data
     macros = list(runtime_data.capabilities.macro_names)
     if not macros:
-        raw = entry.options.get(CONF_MACROS, "")
-        macros = [item.strip() for item in raw.split(",") if item.strip()]
-    async_add_entities(Ap2xMacroButton(runtime_data, entry, macro) for macro in macros)
+        macros = parse_name_list(entry.options.get(CONF_MACROS, ""))
+    buttons: list[Ap2xMacroButton] = []
+    keys: set[str] = set()
+    for macro in macros:
+        key = slugify(macro)
+        if key in keys:
+            continue
+        keys.add(key)
+        buttons.append(Ap2xMacroButton(runtime_data, entry, macro))
+    async_add_entities(buttons)
 
 
 class Ap2xMacroButton(Ap2xEntity, ButtonEntity):

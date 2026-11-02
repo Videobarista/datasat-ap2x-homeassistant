@@ -2,7 +2,11 @@ line-length = 100
 target-version = "py313"
 
 [lint]
-select = ["B", "E", "F", "I", "UP", "W"]
+select = ["B", "E", "F", "I", "S", "UP", "W"]
+
+[lint.per-file-ignores]
+# pytest uses plain asserts, and the tests use made-up passwords
+"tests/**" = ["S101", "S105", "S106"]
 
 [lint.isort]
 force-sort-within-sections = true

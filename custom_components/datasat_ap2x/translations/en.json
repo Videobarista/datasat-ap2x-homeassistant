@@ -7,19 +7,21 @@
         "data": {
           "host": "IP address",
           "port": "Port",
-          "password": "NetCmd or Setup password (leave empty if none)"
+          "password": "NetCmd password (leave empty if none)"
         },
         "data_description": {
           "host": "IP address or host name of the processor. A fixed address (DHCP reservation) is recommended.",
           "port": "TCP control port. 14500 unless it was changed on the unit.",
-          "password": "Only needed when a NetCmd or Setup password is set under System > Access Control on the unit."
+          "password": "Only needed when a password is set under System > Access Control on the unit. Use the NetCmd password: Home Assistant only needs operator commands, and the Setup password would give it setup-level access."
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot reach the processor. Check the IP address, the port and whether the unit is switched on.",
       "invalid_auth": "The processor rejected the password (SECERR).",
-      "unknown": "Unexpected error. Check the Home Assistant log for details."
+      "unknown": "Unexpected error. Check the Home Assistant log for details.",
+      "invalid_password": "The password can only contain printable ASCII characters (up to 64).",
+      "not_a_processor": "Something answers on this address, but not like a Datasat processor. Check the IP address and port."
     },
     "abort": {
       "already_configured": "This processor is already configured."
@@ -36,6 +38,7 @@
           "power_switch": "External power switch entity (smart plug or relay)",
           "power_on_macro": "Macro to run after powering on",
           "power_off_macro": "Macro to run before powering off",
+          "enable_pulse": "Allow the GPIO pulse action",
           "scan_interval": "Poll interval"
         },
         "data_description": {
@@ -44,21 +47,42 @@
           "power_switch": "Only needed if the processor does not accept the POWER command. Point this at the switch that feeds it.",
           "power_on_macro": "Runs after the processor is switched on, for example to set a default format and fader level.",
           "power_off_macro": "Runs before the processor is switched off, for example to mute the outputs first.",
+          "enable_pulse": "Lets administrators and automations fire pulses on the GPIO outputs, which can switch hardware such as masking, lights or amplifier relays. Leave off if you do not use it.",
           "scan_interval": "How often the state is read. Temperatures and voltages are read about once a minute regardless."
         }
       }
+    },
+    "error": {
+      "invalid_names": "Names can only contain printable ASCII characters without '@' (up to 64 per name)."
     }
   },
   "services": {
     "pulse": {
       "name": "Pulse a GPIO output",
-      "description": "Fires a 250 ms pulse on one of the GPIO outputs. Only works on units whose firmware accepts the PULSE command.",
+      "description": "Fires a 250 ms pulse on one of the GPIO outputs. Administrators and automations only, and only when allowed in the integration options. Works on units whose firmware accepts the PULSE command.",
       "fields": {
         "gpio": {
           "name": "GPIO number",
           "description": "The GPIO output to pulse, 1 to 21."
         }
       }
+    }
+  },
+  "issues": {
+    "setup_password": {
+      "title": "{title} uses the Setup password",
+      "description": "Home Assistant logs in to {title} with the Setup password, which gives setup-level access to the processor. The integration only needs operator commands. Set a NetCmd password under System > Access Control on the unit, then remove this processor in Home Assistant and add it again with that password."
+    }
+  },
+  "exceptions": {
+    "unknown_format": {
+      "message": "'{format}' is not one of the formats of this processor."
+    },
+    "pulse_disabled": {
+      "message": "GPIO pulses are switched off for {title}. Turn on 'Allow the GPIO pulse action' in the integration options."
+    },
+    "invalid_name": {
+      "message": "{error}"
     }
   }
 }

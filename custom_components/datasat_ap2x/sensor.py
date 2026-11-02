@@ -52,8 +52,13 @@ class Ap2xTemperatureSensor(Ap2xEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Only available when this board reported a value."""
-        return super().available and len(self.coordinator.data.temperatures) > self._index
+        """Only available when this board reported a usable value."""
+        temperatures = self.coordinator.data.temperatures
+        return (
+            super().available
+            and len(temperatures) > self._index
+            and temperatures[self._index] is not None
+        )
 
     @property
     def native_value(self) -> float | None:

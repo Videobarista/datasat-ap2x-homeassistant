@@ -6,10 +6,11 @@ from collections.abc import Awaitable, Callable
 import logging
 from typing import Any
 
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import Ap2xConnectionError, Ap2xError
+from .api import Ap2xConnectionError, Ap2xError, Ap2xInvalidArgument
 from .const import DOMAIN, MANUFACTURER, MODEL
 from .coordinator import Ap2xCoordinator
 
@@ -60,11 +61,18 @@ class Ap2xEntity(CoordinatorEntity[Ap2xCoordinator]):
         """Run one command and refresh, tolerating a processor that is switched off.
 
         Pressing a button while the unit is off is normal in a projection booth,
-        so that is logged at debug level. Anything else is a real fault.
+        so that is logged at debug level. A name that cannot be sent is the
+        caller's mistake and is shown to them. Anything else is a real fault.
         """
         host = self.coordinator.client.host
         try:
             await action()
+        except Ap2xInvalidArgument as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_name",
+                translation_placeholders={"error": str(err)},
+            ) from err
         except Ap2xConnectionError as err:
             _LOGGER.debug("Could not %s: %s is not reachable (%s)", description, host, err)
             return

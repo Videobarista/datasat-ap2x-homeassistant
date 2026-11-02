@@ -5,13 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import CONF_HOST, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
 from . import Ap2xConfigEntry
 from .const import CONF_MAC, CONF_SERIAL
 
-TO_REDACT = {CONF_PASSWORD, CONF_MAC, CONF_SERIAL}
+# Diagnostics are meant to be shared in issue reports: leave out credentials and
+# anything that identifies the unit, the network or the cinema it is installed in.
+TO_REDACT = {CONF_PASSWORD, CONF_HOST, CONF_MAC, CONF_SERIAL, "circuit", "theater", "screen"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -20,6 +22,7 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostics for one processor."""
     runtime_data = entry.runtime_data
     system = runtime_data.system
+    client = runtime_data.coordinator.client
     data = runtime_data.coordinator.data
 
     return {
@@ -27,14 +30,18 @@ async def async_get_config_entry_diagnostics(
             "data": async_redact_data(dict(entry.data), TO_REDACT),
             "options": dict(entry.options),
         },
-        "system": {
-            "version": system.version,
-            "version_date": system.version_date,
-            "circuit": system.circuit,
-            "theater": system.theater,
-            "screen": system.screen,
-            "boards": system.boards,
-        },
+        "system": async_redact_data(
+            {
+                "version": system.version,
+                "version_date": system.version_date,
+                "circuit": system.circuit,
+                "theater": system.theater,
+                "screen": system.screen,
+                "boards": system.boards,
+            },
+            TO_REDACT,
+        ),
+        "auth_level": client.auth_level,
         "capabilities": runtime_data.capabilities.as_dict(),
         "state": {
             "reachable": data.reachable,

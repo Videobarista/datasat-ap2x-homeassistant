@@ -7,7 +7,9 @@ rules:
   # Bronze
   action-setup:
     status: done
-    comment: The pulse action is registered in async_setup.
+    comment: >-
+      The pulse action is registered in async_setup, limited to administrators,
+      and refused unless allowed in the options.
   appropriate-polling:
     status: done
     comment: >-

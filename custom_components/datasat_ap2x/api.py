@@ -1,10 +1,17 @@
-"""Async TCP client for the Datasat AP20/AP25 (TN-H413 protocol family)."""
+"""Async TCP client for the Datasat AP20/AP25 (TN-H413 protocol family).
+
+Everything the processor sends is treated as untrusted input: replies are length
+limited, matched against the command that was sent, and parsed defensively.
+Everything sent to the processor is checked first, so a name or password can
+never carry a second command.
+"""
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
 import logging
+import math
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,10 +19,29 @@ DEFAULT_PORT = 14500
 _TIMEOUT = 5.0
 PROBE_TIMEOUT = 3.0
 
+# Longest reply accepted. Real replies are well under 1 KiB; anything longer means
+# the unit (or whatever answers on this address) is misbehaving.
+LINE_LIMIT = 8192
+
+MAX_ARGUMENT_LENGTH = 64  # format and macro names
+MAX_PASSWORD_LENGTH = 64
+MAX_NAMES = 64  # formats or macros accepted from one listing
+MAX_TEXT_LENGTH = 64  # identification fields such as version or theater name
+MAX_BOARDS = 16
+
 VOLTS_BOARDS = ("H331", "H332", "H335", "H336", "H338")
 MIN_GPIO = 1
 MAX_GPIO = 21
+FADER_MAX = 100  # tenths; 100 == 10.0 on the front panel
+LEVEL_MAX = 100  # monitor level
 VOLUME_MAX = 700  # negative tenths of a dB, 700 == -70.0 dB
+
+AUTH_LEVEL_SETUP = "SETUP"
+AUTH_LEVEL_OPERATOR = "OP"
+
+# Replies that identify the unit or its site. They are left out of the debug log,
+# because debug logs tend to end up in public issue reports.
+_PRIVATE_REPLIES = frozenset({"SYSTEM", "MAC", "SERIALNO", "IDENTIFY"})
 
 
 class Ap2xError(Exception):
@@ -23,11 +49,19 @@ class Ap2xError(Exception):
 
 
 class Ap2xAuthError(Ap2xError):
-    """Raised when AUTH is rejected (SECERR)."""
+    """Raised when the processor refuses the password or demands one."""
 
 
 class Ap2xConnectionError(Ap2xError):
     """Raised when the device cannot be reached or the link drops."""
+
+
+class Ap2xProtocolError(Ap2xError):
+    """Raised when the processor answers, but not with a reply to what was asked."""
+
+
+class Ap2xInvalidArgument(Ap2xError, ValueError):
+    """Raised when a name cannot be sent safely as part of a command."""
 
 
 @dataclass
@@ -76,11 +110,73 @@ class Ap2xCapabilities:
 
 @dataclass
 class Ap2xVolts:
-    """One HEALTH voltage record."""
+    """One HEALTH voltage record.
+
+    values keeps the position of every field after the status flag; a field that
+    could not be read is None, so later fields never shift into the wrong place.
+    """
 
     present: bool = True
     ok: bool | None = None
-    values: list[float] = field(default_factory=list)
+    values: list[float | None] = field(default_factory=list)
+
+
+# ---- Input checks --------------------------------------------------------
+
+
+def is_safe_argument(value: str) -> bool:
+    """Return True for a name that can be sent as a command argument.
+
+    The protocol is line based: a carriage return ends a command and "@" starts
+    the next one. Only printable ASCII without "@" is accepted, so a name can never
+    carry a second command.
+    """
+    return (
+        0 < len(value) <= MAX_ARGUMENT_LENGTH
+        and value.isascii()
+        and value.isprintable()
+        and "@" not in value
+    )
+
+
+def is_safe_password(value: str) -> bool:
+    """Return True for a password that can be sent with @AUTH.
+
+    Passwords may contain "@"; control characters, which could end the line, are
+    refused.
+    """
+    return 0 < len(value) <= MAX_PASSWORD_LENGTH and value.isascii() and value.isprintable()
+
+
+def parse_name_list(text: str) -> list[str]:
+    """Split a comma-separated list of names, keeping only names that are safe to send.
+
+    Names are trimmed, duplicates are dropped and at most MAX_NAMES are kept, so a
+    misbehaving unit cannot flood Home Assistant with entities.
+    """
+    names: list[str] = []
+    for raw in text.split(","):
+        name = raw.strip()
+        if not name or name in names:
+            continue
+        if not is_safe_argument(name):
+            _LOGGER.debug("Ignoring a name that cannot be sent to the unit: %r", name[:80])
+            continue
+        if len(names) == MAX_NAMES:
+            _LOGGER.debug("Ignoring names beyond the first %s", MAX_NAMES)
+            break
+        names.append(name)
+    return names
+
+
+def _check_argument(value: str, what: str) -> str:
+    """Return value if it is safe to send, otherwise raise Ap2xInvalidArgument."""
+    if not is_safe_argument(value):
+        raise Ap2xInvalidArgument(
+            f"{what} {value[:80]!r} cannot be sent: use up to {MAX_ARGUMENT_LENGTH} "
+            "printable ASCII characters, without '@'"
+        )
+    return value
 
 
 class Ap2xClient:
@@ -96,6 +192,7 @@ class Ap2xClient:
         self.host = host
         self.port = port
         self.password = password
+        self.auth_level: str | None = None
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._lock = asyncio.Lock()
@@ -115,23 +212,57 @@ class Ap2xClient:
         async with self._lock:
             await self._close_locked()
 
-    async def command(self, cmd: str, timeout: float = _TIMEOUT) -> str:
-        """Send one command and return the response line without its terminator."""
+    async def command(
+        self,
+        cmd: str,
+        timeout: float = _TIMEOUT,
+        *,
+        expect: tuple[str, ...] | None = None,
+    ) -> str:
+        """Send one command and return the reply without its terminator.
+
+        With expect, the first word of the reply must be one of those words.
+        Anything else means request and reply have drifted apart, so the socket is
+        closed and the next command starts on a clean connection.
+        """
+        if not cmd.isascii() or not cmd.isprintable():
+            raise Ap2xInvalidArgument(
+                f"Refusing to send a command with control characters: {cmd[:40]!r}"
+            )
+
         async with self._lock:
             try:
                 await self._connect_locked()
-                return await self._request_locked(cmd, timeout)
+                reply = await self._request_locked(cmd, timeout)
             except (OSError, TimeoutError, asyncio.IncompleteReadError) as err:
                 await self._close_locked()
                 raise Ap2xConnectionError(
-                    f"I/O error while sending '{cmd}' to {self.host}: {err}"
+                    f"I/O error while sending '{_keyword(cmd)}' to {self.host}: {err}"
                 ) from err
+            except asyncio.LimitOverrunError as err:
+                await self._close_locked()
+                raise Ap2xProtocolError(
+                    f"Reply to '{_keyword(cmd)}' from {self.host} is longer than {LINE_LIMIT} bytes"
+                ) from err
+
+            if expect is not None and _keyword(reply) not in expect:
+                await self._close_locked()
+                if _keyword(reply) == "SECERR":
+                    raise Ap2xAuthError(
+                        f"The processor at {self.host} requires a valid password for "
+                        f"'{_keyword(cmd)}' (SECERR)"
+                    )
+                raise Ap2xProtocolError(
+                    f"Expected a reply to '{_keyword(cmd)}' from {self.host}, "
+                    f"got one starting with '{_keyword(reply)[:20]}'"
+                )
+            return reply
 
     async def try_command(self, cmd: str, timeout: float = PROBE_TIMEOUT) -> str | None:
         """Send a command that the unit may not know, returning None if it does not answer.
 
-        An unknown command usually produces no reply at all, so the connection
-        is dropped afterwards and reopened by the next call.
+        An unknown command produces "BadCommand" or no reply at all; in the second
+        case the connection is dropped and reopened by the next call.
         """
         try:
             reply = await self.command(cmd, timeout=timeout)
@@ -150,10 +281,15 @@ class Ap2xClient:
         if self.connected:
             return
 
+        if self.password and not is_safe_password(self.password):
+            raise Ap2xAuthError(
+                "The configured password contains characters that cannot be sent to the processor"
+            )
+
         _LOGGER.debug("Connecting to %s:%s", self.host, self.port)
         try:
             self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(self.host, self.port), _TIMEOUT
+                asyncio.open_connection(self.host, self.port, limit=LINE_LIMIT), _TIMEOUT
             )
         except (OSError, TimeoutError) as err:
             self._reader = None
@@ -163,13 +299,24 @@ class Ap2xClient:
         if self.password:
             try:
                 reply = await self._request_locked(f"AUTH {self.password}", _TIMEOUT, "AUTH ***")
-            except (OSError, TimeoutError, asyncio.IncompleteReadError) as err:
+            except (
+                OSError,
+                TimeoutError,
+                asyncio.IncompleteReadError,
+                asyncio.LimitOverrunError,
+            ) as err:
                 await self._close_locked()
                 raise Ap2xConnectionError(f"Authentication to {self.host} failed: {err}") from err
-            if "SECERR" in reply.upper():
+            words = reply.upper().split()
+            if "SECERR" in words:
                 await self._close_locked()
                 raise Ap2xAuthError("Password rejected by the processor (SECERR)")
-            _LOGGER.debug("Authenticated: %s", reply)
+            if AUTH_LEVEL_SETUP in words:
+                self.auth_level = AUTH_LEVEL_SETUP
+            elif AUTH_LEVEL_OPERATOR in words:
+                self.auth_level = AUTH_LEVEL_OPERATOR
+            else:
+                _LOGGER.debug("Unrecognised reply to AUTH from %s: %s", self.host, reply[:40])
 
     async def _close_locked(self) -> None:
         """Close the socket. Caller holds the lock."""
@@ -195,11 +342,12 @@ class Ap2xClient:
         if reader is None or writer is None:
             raise Ap2xConnectionError(f"Not connected to {self.host}")
 
-        writer.write(f"@{cmd}\r".encode("ascii", errors="replace"))
+        writer.write(f"@{cmd}\r".encode("ascii"))
         await writer.drain()
         raw = await asyncio.wait_for(reader.readuntil(b"\r"), timeout)
         text = raw.decode("ascii", errors="replace").strip("\r\n\x00 ")
-        _LOGGER.debug("%s -> %s", log_cmd if log_cmd is not None else cmd, text)
+        shown = "<private, not logged>" if _keyword(cmd) in _PRIVATE_REPLIES else text
+        _LOGGER.debug("%s -> %s", log_cmd if log_cmd is not None else cmd, shown)
         return text
 
     # ---- Documented commands ---------------------------------------------
@@ -209,12 +357,13 @@ class Ap2xClient:
         info = Ap2xSystemInfo()
 
         # @SYSTEM returns VER / VERDATE / MAC separated by LF within one record.
+        # The first command on a fresh connection, so no earlier reply can be pending.
         system = await self.command("SYSTEM")
         for line in system.replace("\n", "|").split("|"):
             parts = line.strip().split(None, 1)
             if len(parts) != 2:
                 continue
-            key, value = parts[0].upper(), parts[1].strip()
+            key, value = parts[0].upper(), _clean_text(parts[1])
             if key == "VER":
                 info.version = value
             elif key == "VERDATE":
@@ -223,124 +372,126 @@ class Ap2xClient:
                 info.mac = value
 
         if info.mac is None:
-            info.mac = _text_arg(await self.command("MAC"))
-        info.serial = _text_arg(await self.command("SERIALNO"))
+            info.mac = _clean_text(_text_arg(await self.command("MAC", expect=("MAC",))))
+        info.serial = _clean_text(_text_arg(await self.command("SERIALNO", expect=("SERIALNO",))))
 
         identify = await self.command("IDENTIFY")
         fields = identify.replace(",", " ").split()
         if len(fields) >= 5 and fields[0].upper().startswith("AP"):
-            info.circuit, info.theater, info.screen = fields[2], fields[3], fields[4]
+            info.circuit = _clean_text(fields[2])
+            info.theater = _clean_text(fields[3])
+            info.screen = _clean_text(fields[4])
 
         info.boards = _board_names(await self.command("BOARDINFO"))
         return info
 
     async def get_fader(self) -> int | None:
         """Return the master fader level in tenths (0-100)."""
-        return _int_arg(await self.command("FADER"))
+        return _bounded_int(await self.command("FADER", expect=("FADER",)), 0, FADER_MAX)
 
     async def set_fader(self, tenths: int) -> None:
         """Set the master fader level in tenths (0-100)."""
-        await self.command(f"FADER {max(0, min(100, int(tenths)))}")
+        await self._set("FADER", max(0, min(FADER_MAX, int(tenths))))
 
     async def get_muted(self) -> bool | None:
         """Return the master mute state."""
-        value = _int_arg(await self.command("MUTED"))
-        return None if value is None else bool(value)
+        return _flag(await self.command("MUTED", expect=("MUTED",)))
 
     async def set_muted(self, muted: bool) -> None:
         """Mute or unmute the main outputs."""
-        await self.command(f"MUTED {1 if muted else 0}")
+        await self._set("MUTED", 1 if muted else 0)
 
     async def get_format(self) -> str | None:
         """Return the name of the active format."""
-        return _name_arg(await self.command("FORMAT"), "FORMAT")
+        name = _name_arg(await self.command("FORMAT", expect=("FORMAT",)), "FORMAT")
+        return _clean_text(name)
 
     async def set_format(self, name: str) -> None:
         """Select a format by its exact name."""
-        await self.command(f"FORMAT {name}")
+        await self._set("FORMAT", _check_argument(name, "Format name"))
 
     async def get_monitor_level(self) -> int | None:
         """Return the monitor (booth) level, 0-100."""
-        return _int_arg(await self.command("MONITORLEVEL"))
+        reply = await self.command("MONITORLEVEL", expect=("MONITORLEVEL",))
+        return _bounded_int(reply, 0, LEVEL_MAX)
 
     async def set_monitor_level(self, level: int) -> None:
         """Set the monitor (booth) level, 0-100."""
-        await self.command(f"MONITORLEVEL {max(0, min(100, int(level)))}")
+        await self._set("MONITORLEVEL", max(0, min(LEVEL_MAX, int(level))))
 
     async def get_monitor_muted(self) -> bool | None:
         """Return the monitor mute state."""
-        value = _int_arg(await self.command("MONITORMUTE"))
-        return None if value is None else bool(value)
+        return _flag(await self.command("MONITORMUTE", expect=("MONITORMUTE",)))
 
     async def set_monitor_muted(self, muted: bool) -> None:
         """Mute or unmute the monitor output."""
-        await self.command(f"MONITORMUTE {1 if muted else 0}")
+        await self._set("MONITORMUTE", 1 if muted else 0)
 
     async def run_macro(self, name: str) -> bool:
-        """Run a macro defined on the unit. Returns False when it does not exist."""
-        reply = await self.command(f"RUNMACRO {name}")
-        if reply.strip().upper().startswith("OK"):
+        """Run a macro defined on the unit. Returns False when the unit refuses it."""
+        _check_argument(name, "Macro name")
+        reply = await self.command(f"RUNMACRO {name}", expect=("OK", "ERR"))
+        if _keyword(reply) == "OK":
             return True
         # The unit answered, so this is a naming problem rather than a link problem.
-        _LOGGER.warning("Macro '%s' was not executed by the processor: %s", name, reply)
+        _LOGGER.warning("Macro '%s' was not executed by the processor: %s", name, reply[:80])
         return False
 
-    async def get_temperatures(self) -> list[float]:
+    async def get_temperatures(self) -> list[float | None]:
         """Return the [H331, H332, H335] board temperatures in degrees Celsius."""
-        return _float_list(_text_arg(await self.command("HEALTH TEMPERATURE")))
+        reply = await self.command("HEALTH TEMPERATURE", expect=("HEALTH",))
+        return _float_list(_text_arg(reply))
 
     async def get_volts(self, board: str) -> Ap2xVolts:
         """Read one HEALTH voltage record, e.g. H336."""
-        field_value = _text_arg(await self.command(f"HEALTH {board}VOLTS"))
+        reply = await self.command(f"HEALTH {board}VOLTS", expect=("HEALTH",))
+        field_value = _text_arg(reply)
         if not field_value or field_value.upper() == "NA":
             return Ap2xVolts(present=False)
         values = _float_list(field_value)
         if not values:
             return Ap2xVolts(present=True, ok=None)
-        return Ap2xVolts(present=True, ok=bool(int(values[0])), values=values[1:])
+        flag = values[0]
+        ok = True if flag == 1 else False if flag == 0 else None
+        return Ap2xVolts(present=True, ok=ok, values=values[1:])
+
+    async def _set(self, keyword: str, value: int | str) -> None:
+        """Send a write command and check that the reply belongs to it."""
+        reply = await self.command(f"{keyword} {value}", expect=(keyword, "OK", "ERR"))
+        if _keyword(reply) == "ERR":
+            _LOGGER.warning("The processor refused '%s %s': %s", keyword, value, reply[:80])
 
     # ---- Commands shared with the RS20i, probed before use ---------------
 
     async def get_power(self) -> bool | None:
         """Return True when the unit is in operating mode, False in standby."""
-        value = _int_arg(await self.command("POWER"))
-        return None if value is None else bool(value)
+        return _flag(await self.command("POWER", expect=("POWER",)))
 
     async def set_power(self, on: bool) -> None:
         """Switch between operating mode and standby. Waking takes about 15 seconds."""
-        await self.command(f"POWER {1 if on else 0}")
+        await self._set("POWER", 1 if on else 0)
 
     async def get_volume_db(self) -> int | None:
         """Return the master volume in negative tenths of a dB (0 to 700)."""
-        return _int_arg(await self.command("VOLUME"))
+        return _bounded_int(await self.command("VOLUME", expect=("VOLUME",)), 0, VOLUME_MAX)
 
     async def set_volume_db(self, tenths: int) -> None:
         """Set the master volume in negative tenths of a dB (0 to 700)."""
-        await self.command(f"VOLUME {max(0, min(VOLUME_MAX, int(tenths)))}")
+        await self._set("VOLUME", max(0, min(VOLUME_MAX, int(tenths))))
 
     async def set_screensaver(self, showing: bool) -> None:
         """Show the screensaver (True) or wake the display (False)."""
-        await self.command(f"SCR {'OFF' if showing else 'ON'}")
+        await self._set("SCR", "OFF" if showing else "ON")
 
     async def pulse_gpio(self, gpio: int) -> bool:
         """Fire a 250 ms pulse on one of the GPIO outputs (1-21)."""
         if not MIN_GPIO <= gpio <= MAX_GPIO:
-            raise ValueError(f"GPIO must be between {MIN_GPIO} and {MAX_GPIO}, got {gpio}")
-        reply = await self.command(f"PULSE {gpio}")
-        if reply.strip().upper().startswith("OK"):
+            raise Ap2xInvalidArgument(f"GPIO must be between {MIN_GPIO} and {MAX_GPIO}, got {gpio}")
+        reply = await self.command(f"PULSE {gpio}", expect=("OK", "ERR", "PULSE"))
+        if _keyword(reply) in ("OK", "PULSE"):
             return True
-        _LOGGER.warning("Pulse on GPIO %s was not accepted: %s", gpio, reply)
+        _LOGGER.warning("Pulse on GPIO %s was not accepted: %s", gpio, reply[:80])
         return False
-
-    async def get_format_names(self, command: str) -> list[str]:
-        """Read the list of format (input) names using the command that this unit accepts."""
-        reply = await self.try_command(command)
-        return _name_list(reply, command)
-
-    async def get_macro_names(self) -> list[str]:
-        """Read the list of macro names defined on the unit."""
-        reply = await self.try_command("MACRONAMES")
-        return _name_list(reply, "MACRONAMES")
 
 
 async def probe_capabilities(client: Ap2xClient) -> Ap2xCapabilities:
@@ -353,13 +504,16 @@ async def probe_capabilities(client: Ap2xClient) -> Ap2xCapabilities:
     caps = Ap2xCapabilities()
 
     power = await client.try_command("POWER")
-    if power is not None and _int_arg(power) in (0, 1):
+    if power is not None and _keyword(power) == "POWER" and _flag(power) is not None:
         caps.power = True
         caps.pulse = True  # Same RS20i command set; PULSE itself cannot be probed safely.
 
     volume = await client.try_command("VOLUME")
-    value = _int_arg(volume or "")
-    if volume is not None and value is not None and 0 <= value <= VOLUME_MAX:
+    if (
+        volume is not None
+        and _keyword(volume) == "VOLUME"
+        and _bounded_int(volume, 0, VOLUME_MAX) is not None
+    ):
         caps.volume_db = True
 
     for command in ("FORMATNAMES", "INPUTNAMES"):
@@ -380,6 +534,12 @@ async def probe_capabilities(client: Ap2xClient) -> Ap2xCapabilities:
 
 
 # ---- Parsing helpers -----------------------------------------------------
+
+
+def _keyword(text: str) -> str:
+    """Return the first word of a command or reply, upper case."""
+    parts = text.split(maxsplit=1)
+    return parts[0].upper() if parts else ""
 
 
 def _is_error_reply(reply: str) -> bool:
@@ -406,8 +566,32 @@ def _int_arg(reply: str) -> int | None:
     try:
         return int(value)
     except ValueError:
-        _LOGGER.debug("Expected a number, got: %s", reply)
+        _LOGGER.debug("Expected a number, got: %s", reply[:40])
         return None
+
+
+def _bounded_int(reply: str, low: int, high: int) -> int | None:
+    """Return the last field as an integer when it lies within [low, high]."""
+    value = _int_arg(reply)
+    if value is None or not low <= value <= high:
+        if value is not None:
+            _LOGGER.debug("Ignoring out-of-range value %s (expected %s-%s)", value, low, high)
+        return None
+    return value
+
+
+def _flag(reply: str) -> bool | None:
+    """Return a 0/1 reply as a boolean; anything else is unknown."""
+    value = _bounded_int(reply, 0, 1)
+    return None if value is None else bool(value)
+
+
+def _clean_text(value: str | None) -> str | None:
+    """Return printable ASCII text, cut to MAX_TEXT_LENGTH; None when nothing is left."""
+    if value is None:
+        return None
+    text = "".join(char for char in value if char.isascii() and char.isprintable()).strip()
+    return text[:MAX_TEXT_LENGTH] or None
 
 
 def _name_arg(reply: str, command: str) -> str | None:
@@ -419,33 +603,49 @@ def _name_arg(reply: str, command: str) -> str | None:
 
 
 def _name_list(reply: str | None, command: str) -> list[str]:
-    """Parse a comma-separated list of names, with or without an echoed command word."""
+    """Parse a listing of names, with or without an echoed command word."""
     if reply is None:
         return []
     text = reply.strip()
     if text.upper().startswith(command):
         text = text[len(command) :].strip()
-    return [name.strip() for name in text.split(",") if name.strip()]
+    return parse_name_list(text)
 
 
 def _board_names(reply: str) -> list[str]:
     """Return the board identifiers listed by @BOARDINFO."""
     names: list[str] = []
     for record in reply.replace("\n", ",").split(","):
-        token = record.strip()
-        if token.upper().startswith(("H3", "HDMI")) and token not in names:
+        token = _clean_text(record)
+        if (
+            token
+            and len(token) <= 16
+            and token.upper().startswith(("H3", "HDMI"))
+            and token not in names
+        ):
             names.append(token)
+            if len(names) == MAX_BOARDS:
+                break
     return names
 
 
-def _float_list(csv: str | None) -> list[float]:
-    """Parse a comma-separated list of floats, skipping unparsable fields."""
+def _float_list(csv: str | None) -> list[float | None]:
+    """Parse a comma-separated list of numbers, keeping each value in its position.
+
+    Fields that are not finite numbers (text, "inf", "nan") become None, so the
+    fields after them keep their meaning.
+    """
     if not csv:
         return []
-    values: list[float] = []
+    values: list[float | None] = []
     for item in csv.split(","):
         try:
-            values.append(float(item))
+            number = float(item)
         except ValueError:
-            _LOGGER.debug("Skipping unparsable value: %s", item)
+            number = math.nan
+        if math.isfinite(number):
+            values.append(number)
+        else:
+            _LOGGER.debug("Ignoring a value that is not a finite number: %r", item[:20])
+            values.append(None)
     return values
