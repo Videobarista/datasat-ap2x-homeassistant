@@ -1,10 +1,30 @@
 version: 2
 updates:
+  # GitHub Actions, pinned to exact versions in the workflows. All updates of one
+  # month arrive together in a single pull request.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    groups:
+      github-actions:
+        patterns: ["*"]
     commit-message:
       prefix: "ci"
+    labels:
+      - "dependencies"
+
+  # Test and lint tools (requirements_test.txt, requirements_lint.txt). The test
+  # plugin pins the Home Assistant release the tests run against, so this keeps
+  # the tests on a current Home Assistant. One pull request per month at most.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      python:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps"
     labels:
       - "dependencies"
