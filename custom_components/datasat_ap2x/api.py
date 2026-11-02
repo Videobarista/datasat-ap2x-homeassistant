@@ -184,6 +184,14 @@ class Ap2xClient:
         except OSError as err:
             _LOGGER.debug("Error while closing connection to %s: %s", self.host, err)
 
+    @staticmethod
+    def _sanitize_cmd_for_log(cmd: str) -> str:
+        """Return a log-safe representation of a command."""
+        head, _, _tail = cmd.partition(" ")
+        if head.upper() == "AUTH":
+            return "AUTH ***"
+        return cmd
+
     async def _request_locked(self, cmd: str, timeout: float, log_cmd: str | None = None) -> str:
         """Write one command and read its reply. Caller holds the lock.
 
@@ -199,7 +207,8 @@ class Ap2xClient:
         await writer.drain()
         raw = await asyncio.wait_for(reader.readuntil(b"\r"), timeout)
         text = raw.decode("ascii", errors="replace").strip("\r\n\x00 ")
-        _LOGGER.debug("%s -> %s", log_cmd if log_cmd is not None else cmd, text)
+        display_cmd = log_cmd if log_cmd is not None else self._sanitize_cmd_for_log(cmd)
+        _LOGGER.debug("%s -> %s", display_cmd, text)
         return text
 
     # ---- Documented commands ---------------------------------------------
