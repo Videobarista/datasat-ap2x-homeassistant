@@ -76,7 +76,7 @@
   },
   "exceptions": {
     "unknown_format": {
-      "message": "'{format}' is not one of the formats of this processor."
+      "message": "This processor has no format named {format}."
     },
     "pulse_disabled": {
       "message": "GPIO pulses are switched off for {title}. Turn on 'Allow the GPIO pulse action' in the integration options."

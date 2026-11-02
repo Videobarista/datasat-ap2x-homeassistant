@@ -76,7 +76,7 @@
   },
   "exceptions": {
     "unknown_format": {
-      "message": "'{format}' is geen format van deze processor."
+      "message": "Deze processor heeft geen format met de naam {format}."
     },
     "pulse_disabled": {
       "message": "GPIO-pulsen staan uit voor {title}. Zet 'GPIO-pulsactie toestaan' aan in de opties van de integratie."
