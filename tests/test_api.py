@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 import logging
-from unittest.mock import patch
 
 import pytest
 
@@ -25,98 +23,7 @@ from custom_components.datasat_ap2x.api import (
     probe_capabilities,
 )
 
-HOST = "192.0.2.20"
-MAC = "080077124578"
-SERIAL = "AP20-0001"
-
-Reply = str | bytes | Callable[[str], "str | bytes | None"] | None
-
-DEFAULT_REPLIES: dict[str, Reply] = {
-    "SYSTEM": f"VER 3.1.2\nVERDATE 2024-05-01\nMAC {MAC}".encode() + b"\r\x00",
-    "SERIALNO": f"SERIALNO {SERIAL}",
-    "IDENTIFY": f"AP20 {HOST} Circuit-1 Theater-3 Screen-3",
-    "BOARDINFO": "H331,1,2,3,4,5,6,7,\nH332,1,2,3,4,5,6,7,\nHDMI,1,2,3,4,5,6,7,",
-    "AUTH": "AUTH OP",
-    "POWER": "POWER 1",
-    "FADER": "FADER 70",
-    "MUTED": "MUTED 0",
-    "FORMAT": "FORMAT Nonsync",
-    "MONITORLEVEL": "MONITORLEVEL 100",
-    "MONITORMUTE": "MONITORMUTE 0",
-    "VOLUME": "BadCommand",
-    "FORMATNAMES": "DCP 5.1 discrete,HDMI 1 Stereo,Nonsync",
-    "INPUTNAMES": "BadCommand",
-    "MACRONAMES": "FORMAT_1,HDMI 1",
-    "SCR": "OK",
-    "RUNMACRO": "OK",
-    "PULSE": "OK",
-    "HEALTH": lambda cmd: f"{cmd} 1,3.18,4.99,15.0,-15.0,-5.0",
-}
-
-
-class _FakeWriter:
-    """Stream writer that hands every complete command line to the fake device."""
-
-    def __init__(self, device: FakeAP20, reader: asyncio.StreamReader) -> None:
-        self._device = device
-        self._reader = reader
-        self._buffer = b""
-        self._closing = False
-
-    def write(self, data: bytes) -> None:
-        self._buffer += data
-        while b"\r" in self._buffer:
-            line, self._buffer = self._buffer.split(b"\r", 1)
-            self._reader.feed_data(self._device.answer(line.decode("ascii")))
-
-    async def drain(self) -> None:
-        return None
-
-    def close(self) -> None:
-        self._closing = True
-
-    def is_closing(self) -> bool:
-        return self._closing
-
-    async def wait_closed(self) -> None:
-        return None
-
-
-class FakeAP20:
-    """A scripted processor reached through an in-memory stream instead of a socket."""
-
-    def __init__(self, **replies: Reply) -> None:
-        self.replies: dict[str, Reply] = {**DEFAULT_REPLIES, **replies}
-        self.sent: list[str] = []
-        self.connections = 0
-
-    async def open_connection(
-        self, host: str, port: int, limit: int = 2**16
-    ) -> tuple[asyncio.StreamReader, _FakeWriter]:
-        self.connections += 1
-        reader = asyncio.StreamReader(limit=limit)
-        return reader, _FakeWriter(self, reader)
-
-    def answer(self, line: str) -> bytes:
-        self.sent.append(line)
-        command = line.removeprefix("@")
-        reply = self.replies.get(command, self.replies.get(command.split(" ", 1)[0]))
-        if callable(reply):
-            reply = reply(command)
-        if reply is None:
-            return b""
-        if isinstance(reply, bytes):
-            return reply
-        return reply.encode("ascii") + b"\r"
-
-
-@contextmanager
-def connected_to(device: FakeAP20) -> Iterator[None]:
-    """Route the client's connections to the fake device."""
-    with patch(
-        "custom_components.datasat_ap2x.api.asyncio.open_connection", device.open_connection
-    ):
-        yield
+from .fake_ap20 import HOST, MAC, SERIAL, FakeAP20, connected_to
 
 
 @contextmanager

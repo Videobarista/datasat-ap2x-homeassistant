@@ -6,6 +6,8 @@
 [![CodeQL](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/codeql.yml)
 [![Tests](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/Videobarista/datasat-ap2x-homeassistant?display_name=tag)](https://github.com/Videobarista/datasat-ap2x-homeassistant/releases)
+[![Local only](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/local-only.yml/badge.svg?branch=main)](https://github.com/Videobarista/datasat-ap2x-homeassistant/actions/workflows/local-only.yml)
+[![IoT class](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FVideobarista%2Fdatasat-ap2x-homeassistant%2Fmain%2Fcustom_components%2Fdatasat_ap2x%2Fmanifest.json&query=%24.iot_class&label=IoT%20class&color=41BDF5)](#local-only)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Quality scale: Bronze (aligned)](https://img.shields.io/badge/quality%20scale-bronze%20(aligned)-cd7f32.svg)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 
@@ -183,6 +185,32 @@ directions:
   issue says so.
 - **Nothing is opened.** The integration listens on no port and only connects
   out to the processor.
+
+### Local only
+
+The integration only talks to your processor, never to the internet or any
+other service. Two automated checks back the **Local only** badge:
+
+- [`scripts/check_local_only.py`](scripts/check_local_only.py) reads the code
+  without running it. It fails on cloud or discovery settings in the manifest,
+  on any library outside a short allowlist, on listening sockets, HTTP sessions,
+  subprocesses and hard-coded addresses, and on any connection other than the
+  one TCP connection to the host and port you configured.
+- [`tests/test_local_only.py`](tests/test_local_only.py) runs the real client
+  against a simulated processor and records every connection during the config
+  flow, setup, polling and commands. All of them must go to the configured host
+  and port.
+
+One deliberate exception: if you set the optional **power switch**, the
+integration switches that entity through a Home Assistant action. That stays
+inside Home Assistant. The static check makes sure it can only be a `switch`,
+`input_boolean` or `light`, and the test checks that nothing else is called.
+
+The **IoT class** badge is read live from the manifest: `local_polling` means
+Home Assistant asks the processor for its state over your own network.
+
+This covers the integration itself; what Home Assistant does (for example its
+optional analytics) is up to your Home Assistant settings.
 
 ### Network hardening
 
