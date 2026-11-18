@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from contextlib import contextmanager
 import logging
@@ -15,8 +16,10 @@ from custom_components.datasat_ap2x.api import (
     MAX_NAMES,
     Ap2xAuthError,
     Ap2xClient,
+    Ap2xConnectionError,
     Ap2xInvalidArgument,
     Ap2xProtocolError,
+    _reason,
     is_safe_argument,
     is_safe_password,
     parse_name_list,
@@ -289,3 +292,30 @@ async def test_probe_ignores_a_reply_for_another_command() -> None:
         caps = await probe_capabilities(client)
     assert not caps.power
     assert not caps.pulse
+
+
+async def test_timeout_names_the_reason() -> None:
+    """A processor that stays silent gives a readable reason, not an empty one."""
+    device = FakeAP20(POWER=None)
+    client = Ap2xClient(HOST)
+    with connected_to(device), pytest.raises(Ap2xConnectionError) as caught:
+        await client.command("POWER", timeout=0.01)
+    assert str(caught.value) == f"I/O error while sending 'POWER' to {HOST}: no reply in time"
+    assert not client.connected
+
+
+@pytest.mark.parametrize(
+    ("err", "expected"),
+    [
+        (TimeoutError(), "no reply in time"),
+        (asyncio.IncompleteReadError(b"", None), "the processor closed the connection"),
+        (
+            ConnectionResetError(104, "Connection reset by peer"),
+            "[Errno 104] Connection reset by peer",
+        ),
+        (ConnectionRefusedError(), "ConnectionRefusedError"),
+    ],
+)
+def test_reason_is_never_empty(err: BaseException, expected: str) -> None:
+    """Every network error is described, also when it carries no message."""
+    assert _reason(err) == expected

@@ -237,7 +237,7 @@ class Ap2xClient:
             except (OSError, TimeoutError, asyncio.IncompleteReadError) as err:
                 await self._close_locked()
                 raise Ap2xConnectionError(
-                    f"I/O error while sending '{_keyword(cmd)}' to {self.host}: {err}"
+                    f"I/O error while sending '{_keyword(cmd)}' to {self.host}: {_reason(err)}"
                 ) from err
             except asyncio.LimitOverrunError as err:
                 await self._close_locked()
@@ -294,7 +294,9 @@ class Ap2xClient:
         except (OSError, TimeoutError) as err:
             self._reader = None
             self._writer = None
-            raise Ap2xConnectionError(f"Cannot connect to {self.host}:{self.port}: {err}") from err
+            raise Ap2xConnectionError(
+                f"Cannot connect to {self.host}:{self.port}: {_reason(err)}"
+            ) from err
 
         if self.password:
             try:
@@ -306,7 +308,9 @@ class Ap2xClient:
                 asyncio.LimitOverrunError,
             ) as err:
                 await self._close_locked()
-                raise Ap2xConnectionError(f"Authentication to {self.host} failed: {err}") from err
+                raise Ap2xConnectionError(
+                    f"Authentication to {self.host} failed: {_reason(err)}"
+                ) from err
             words = reply.upper().split()
             if "SECERR" in words:
                 await self._close_locked()
@@ -534,6 +538,19 @@ async def probe_capabilities(client: Ap2xClient) -> Ap2xCapabilities:
 
 
 # ---- Parsing helpers -----------------------------------------------------
+
+
+def _reason(err: BaseException) -> str:
+    """Describe a network error, also when the exception carries no message.
+
+    A timeout from asyncio.wait_for and a connection closed by the processor
+    both come with an empty message, which left the log line ending in a colon.
+    """
+    if isinstance(err, TimeoutError):
+        return "no reply in time"
+    if isinstance(err, asyncio.IncompleteReadError):
+        return "the processor closed the connection"
+    return str(err) or type(err).__name__
 
 
 def _keyword(text: str) -> str:
